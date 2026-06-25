@@ -52,6 +52,11 @@ export async function POST(req: Request) {
     rpID: process.env.NEXT_PUBLIC_APP_DOMAIN!,
     userID: new TextEncoder().encode(user.id),
     userName: email,
+    authenticatorSelection: {
+      authenticatorAttachment: 'platform',
+      residentKey: 'required',
+      userVerification: 'required',
+    },
     excludeCredentials: existingPasskeys?.map((p) => ({
       id: p.credential_id,
       transports: p.device_type === 'singleDevice' ? ['internal'] : ['hybrid'],

@@ -25,6 +25,7 @@ export async function POST(req: Request) {
 
   const options = await generateAuthenticationOptions({
     rpID: process.env.NEXT_PUBLIC_APP_DOMAIN!,
+    userVerification: 'required',
     allowCredentials: passkeys.map((p) => ({
       id: p.credential_id,
       transports: p.device_type === 'singleDevice' ? ['internal'] : ['hybrid'],
