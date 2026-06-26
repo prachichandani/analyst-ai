@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { LogOut } from 'lucide-react';
 
 export default function Chat() {
   const router = useRouter();
@@ -88,63 +91,142 @@ export default function Chat() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/auth');
+      router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
-      <div className="w-full max-w-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-center text-black">AI Chat</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 border border-black text-black rounded hover:bg-gray-100"
-          >
-            Logout
-          </button>
-        </div>
+    <div className="flex h-screen flex-col bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
+        <div className="flex h-16 items-center justify-between px-6">
+          <div>
+            <h1 className="text-lg font-semibold">Analyst AI</h1>
+            <p className="text-xs text-muted-foreground">
+              AI-powered financial assistant
+            </p>
+          </div>
 
-        <div className="mb-6 space-y-4">
-          {messages.map((message: any) => (
-            <div
-              key={message.id}
-              className={`p-4 border rounded ${
-                message.role === 'user'
-                  ? 'border-black ml-8 bg-gray-100'
-                  : 'border-black mr-8 bg-white'
-              }`}
-            >
-              {message.parts?.map((part: any, i: number) =>
-                part.type === 'text' ? (
-                  <p key={i} className="whitespace-pre-wrap text-black">{part.text}</p>
-                ) : null
-              )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
+      </header>
+
+      {/* Messages */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-4xl flex-col px-6 py-8">
+
+          {messages.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center py-32 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground text-3xl">
+                🤖
+              </div>
+
+              <h2 className="text-4xl font-bold">
+                Welcome to Analyst AI
+              </h2>
+
+              <p className="mt-3 max-w-md text-muted-foreground">
+                Analyze reports, compare companies, summarize financial
+                statements, or ask any business-related questions.
+              </p>
+
+              <div className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  "Summarize this annual report",
+                  "Compare HDFC vs ICICI",
+                  "Analyze quarterly earnings",
+                  "Explain revenue growth",
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => setInput(prompt)}
+                    className="rounded-xl border bg-card p-4 text-left transition hover:bg-muted"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
+          ) : (
+            <>
+              {messages.map((message: any) => (
+                <div
+                  key={message.id}
+                  className={`mb-6 flex ${
+                    message.role === "user"
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-3xl px-5 py-4 shadow-sm ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "border bg-card"
+                    }`}
+                  >
+                    {message.parts?.map((part: any, index: number) =>
+                      part.type === "text" ? (
+                        <p
+                          key={index}
+                          className="whitespace-pre-wrap leading-7"
+                        >
+                          {part.text}
+                        </p>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {isBusy && (
+                <div className="mb-6 flex justify-start">
+                  <div className="rounded-3xl border bg-card px-5 py-4 text-muted-foreground">
+                    Thinking...
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
+      </main>
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 p-3 border border-black rounded resize-none bg-white text-black"
-            rows={3}
-            disabled={isBusy}
-          />
-          <button
-            type="submit"
-            disabled={isBusy || !input.trim()}
-            className="px-6 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {isBusy ? 'Sending...' : 'Send'}
-          </button>
-        </form>
-      </div>
+      {/* Input */}
+      <footer className="border-t bg-background">
+        <div className="mx-auto max-w-4xl px-6 py-5">
+          <form onSubmit={handleSubmit}>
+            <div className="flex items-end gap-3 rounded-3xl border bg-card p-3 shadow-sm">
+
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Message Analyst AI..."
+                disabled={isBusy}
+                className="max-h-48 min-h-[60px] flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+              />
+
+              <Button
+                type="submit"
+                disabled={isBusy || !input.trim()}
+                className="rounded-full px-6"
+              >
+                {isBusy ? "..." : "Send"}
+              </Button>
+
+            </div>
+          </form>
+        </div>
+      </footer>
     </div>
   );
 }

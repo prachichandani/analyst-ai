@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -46,35 +49,81 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
-      <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-bold text-center text-black">Register</h1>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-background via-background to-muted/30 px-4">
 
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
-          className="w-full p-3 border border-black rounded bg-white text-black"
-          disabled={loading}
-        />
+      {/* Background Glow */}
+      <div className="absolute -left-32 top-20 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+      <div className="absolute -right-32 bottom-20 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+      <div className="relative w-full max-w-md">
 
-        <button
-          onClick={handleRegister}
-          disabled={loading || !email.trim()}
-          className="w-full py-3 bg-black text-white rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Please wait...' : 'Register Passkey'}
-        </button>
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-2xl text-primary-foreground shadow-lg">
+            🤖
+          </div>
 
-        <p className="text-center text-sm text-black">
-          Already have an account?{' '}
-          <a href="/login" className="underline hover:text-gray-700">
+          <h1 className="text-4xl font-bold tracking-tight">
+            Analyst AI
+          </h1>
+
+          <p className="mt-3 text-muted-foreground">
+            Create your account using a secure passkey
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="rounded-3xl border bg-card/70 p-8 shadow-2xl backdrop-blur-xl">
+
+          <div className="space-y-5">
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Email Address
+              </label>
+
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                disabled={loading}
+                className="h-12 rounded-xl"
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              onClick={handleRegister}
+              disabled={loading || !email.trim()}
+              className="h-12 w-full rounded-xl text-base font-medium"
+            >
+              {loading ? "Creating Account..." : "Register with Passkey"}
+            </Button>
+
+            <div className="rounded-xl bg-muted/50 p-4 text-center text-sm text-muted-foreground">
+              🔒 Your fingerprint or Face ID stays on your device and is never shared.
+            </div>
+
+          </div>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <a
+            href="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Sign in
           </a>
         </p>
+
       </div>
     </div>
   );
