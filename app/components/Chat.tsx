@@ -5,14 +5,28 @@ import { useChat } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut } from 'lucide-react';
+import { LogOut, Trash2 } from 'lucide-react';
 
-export default function Chat() {
+interface ChatProps {
+  initialMessages: any[];
+}
+
+export default function Chat({ initialMessages }: ChatProps) {
   const router = useRouter();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, status, setMessages } = useChat({
+    messages: initialMessages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      parts: [
+        {
+          type: 'text' as const,
+          text: msg.content,
+        },
+      ],
+    })),
     experimental_throttle: 50,
     onFinish: async (response) => {
       if (response.message.role !== 'assistant') return;
@@ -32,30 +46,6 @@ export default function Chat() {
       }
     },
   });
-
-  // Load messages on mount
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/messages');
-        if (res.status === 401) {
-          router.push('/login');
-          return;
-        }
-        const saved = await res.json();
-        setMessages(
-          saved.map((msg: any) => ({
-            id: msg.id,
-            role: msg.role,
-            parts: [{ type: 'text' as const, text: msg.content }],
-          }))
-        );
-      } catch (err) {
-        console.error('Failed to load messages:', err);
-      }
-    };
-    load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto scroll
   useEffect(() => {
@@ -85,6 +75,27 @@ export default function Chat() {
 
     sendMessage({ text });
   };
+  const handleClearChat = async () => {
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'DELETE',
+      });
+
+      if (res.status === 401) {
+        router.push('/login');
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error('Failed to clear chat');
+      }
+
+      // Clear messages from the UI
+      setMessages([]);
+    } catch (err) {
+      console.error('Failed to clear chat:', err);
+    }
+  };
 
   const isBusy = status === 'streaming' || status === 'submitted';
 
@@ -109,13 +120,13 @@ export default function Chat() {
             </p>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
         </div>
       </header>
 
@@ -214,15 +225,28 @@ export default function Chat() {
                 disabled={isBusy}
                 className="max-h-48 min-h-[60px] flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
               />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClearChat}
+                  disabled={messages.length === 0 || isBusy}
+                  title="Clear Chat"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
 
-              <Button
-                type="submit"
-                disabled={isBusy || !input.trim()}
-                className="rounded-full px-6"
-              >
-                {isBusy ? "..." : "Send"}
-              </Button>
+                <Button
+                  type="submit"
+                  disabled={isBusy || !input.trim()}
+                  className="rounded-full px-6"
+                >
+                  {isBusy ? "..." : "Send"}
+                </Button>
+              </div>
 
+            
             </div>
           </form>
         </div>
