@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { LogOut, Trash2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatProps {
   initialMessages: any[];
@@ -151,10 +153,10 @@ export default function Chat({ initialMessages }: ChatProps) {
 
               <div className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
-                  "Summarize this annual report",
-                  "Compare HDFC vs ICICI",
-                  "Analyze quarterly earnings",
-                  "Explain revenue growth",
+                   "Which hedge funds have the highest AUM?",
+                   "Show the top holdings of Citadel Advisors",
+                   "Compare Bridgewater Associates and Renaissance Technologies",
+                   "Which funds hold NVIDIA stock?",
                 ].map((prompt) => (
                   <button
                     key={prompt}
@@ -186,12 +188,56 @@ export default function Chat({ initialMessages }: ChatProps) {
                   >
                     {message.parts?.map((part: any, index: number) =>
                       part.type === "text" ? (
-                        <p
-                          key={index}
-                          className="whitespace-pre-wrap leading-7"
-                        >
-                          {part.text}
-                        </p>
+                        message.role === "assistant" ? (
+                          <div key={index} className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                table: ({ children }) => (
+                                  <div className="overflow-x-auto my-4">
+                                    <table className="min-w-full border-collapse border border-border">
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                thead: ({ children }) => (
+                                  <thead className="bg-muted">{children}</thead>
+                                ),
+                                tbody: ({ children }) => (
+                                  <tbody>{children}</tbody>
+                                ),
+                                tr: ({ children }) => (
+                                  <tr className="border-b border-border">{children}</tr>
+                                ),
+                                th: ({ children }) => (
+                                  <th className="px-4 py-2 text-left font-semibold text-sm">{children}</th>
+                                ),
+                                td: ({ children }) => (
+                                  <td className="px-4 py-2 text-sm">{children}</td>
+                                ),
+                                code: ({ children, className }) => {
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  return match ? (
+                                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto my-4">
+                                      <code className={className}>{children}</code>
+                                    </pre>
+                                  ) : (
+                                    <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                                  );
+                                },
+                              }}
+                            >
+                              {part.text}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p
+                            key={index}
+                            className="whitespace-pre-wrap leading-7"
+                          >
+                            {part.text}
+                          </p>
+                        )
                       ) : null
                     )}
                   </div>
