@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { role, content } = body;
+    const { role, content, tool_data, metadata } = body;
 
     if (!role || !content) {
       return NextResponse.json(
@@ -76,9 +76,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const insertData: any = { role, content, user_id: session.userId };
+    if (tool_data) {
+      insertData.tool_data = tool_data;
+    }
+    if (metadata) {
+      insertData.metadata = metadata;
+    }
+
     const { data, error } = await supabase
       .from('messages')
-      .insert([{ role, content, user_id: session.userId }])
+      .insert([insertData])
       .select()
       .single();
 

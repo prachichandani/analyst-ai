@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const { messages }: { messages: UIMessage[] } = await request.json();
-  
+
   const result = streamText({
     model: chatModel,
     messages: await convertToModelMessages(messages),
@@ -43,6 +43,12 @@ export async function POST(request: Request) {
       },
     },
     stopWhen: stepCountIs(20),
+    providerOptions: {
+      openai: {
+        reasoningEffort: 'high',
+        reasoningSummary: 'detailed'
+      },
+    },
   });
 
   return result.toUIMessageStreamResponse();

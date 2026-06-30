@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LogOut, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
 
 interface ChatProps {
   initialMessages: any[];
@@ -22,12 +23,19 @@ export default function Chat({ initialMessages }: ChatProps) {
     messages: initialMessages.map((msg) => ({
       id: msg.id,
       role: msg.role,
-      parts: [
-        {
-          type: 'text' as const,
-          text: msg.content,
-        },
+      parts: [  
+        ...(msg.metadata?.reasoning
+          ? [{ type: 'reasoning', text: msg.metadata.reasoning }]
+          : []),
+        ...(msg.tool_data ?? []).map((t: any) => ({
+          type: `tool-${t.toolName}`,
+          input: t.args,
+          output: t.result,
+          state: 'output-available',
+        })),
+        { type: 'text', text: msg.content },
       ],
+      metadata: msg.metadata,
     })),
     experimental_throttle: 50,
     onFinish: async (response) => {
@@ -37,11 +45,26 @@ export default function Chat({ initialMessages }: ChatProps) {
       const content = textPart && 'text' in textPart ? textPart.text : '';
       if (!content.trim()) return;
 
+      const toolParts = response.message.parts.filter((p: any) => p.type && p.type.startsWith('tool-'));
+      const toolData: any[] = toolParts.map((toolPart: any) => ({
+        toolName: toolPart.type.replace('tool-', ''),
+        args: toolPart.input,
+        result: toolPart.output,
+      }));
+
+      const reasoningPart = response.message.parts.find((p: any) => p.type === 'reasoning') as any;
+      const reasoning = reasoningPart?.text || null;
+
       try {
         await fetch('/api/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'assistant', content }),
+          body: JSON.stringify({
+            role: 'assistant',
+            content,
+            tool_data: toolData.length > 0 ? toolData : undefined,
+            metadata: reasoning ? { reasoning } : undefined,
+          }),
         });
       } catch (error) {
         console.error('Failed to save assistant message:', error);
@@ -49,7 +72,6 @@ export default function Chat({ initialMessages }: ChatProps) {
     },
   });
 
-  // Auto scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -77,22 +99,15 @@ export default function Chat({ initialMessages }: ChatProps) {
 
     sendMessage({ text });
   };
+
   const handleClearChat = async () => {
     try {
-      const res = await fetch('/api/messages', {
-        method: 'DELETE',
-      });
-
+      const res = await fetch('/api/messages', { method: 'DELETE' });
       if (res.status === 401) {
         router.push('/login');
         return;
       }
-
-      if (!res.ok) {
-        throw new Error('Failed to clear chat');
-      }
-
-      // Clear messages from the UI
+      if (!res.ok) throw new Error('Failed to clear chat');
       setMessages([]);
     } catch (err) {
       console.error('Failed to clear chat:', err);
@@ -110,53 +125,39 @@ export default function Chat({ initialMessages }: ChatProps) {
     }
   };
 
+  const lastMessage = messages[messages.length - 1];
+
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
         <div className="flex h-16 items-center justify-between px-6">
           <div>
             <h1 className="text-lg font-semibold">Analyst AI</h1>
-            <p className="text-xs text-muted-foreground">
-              AI-powered financial assistant
-            </p>
+            <p className="text-xs text-muted-foreground">AI-powered financial assistant</p>
           </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-5 w-5" />
-            </Button>
+          <Button variant="ghost" size="icon" onClick={handleLogout}>
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
       </header>
 
-      {/* Messages */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-4xl flex-col px-6 py-8">
-
           {messages.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center py-32 text-center">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground text-3xl">
                 🤖
               </div>
-
-              <h2 className="text-4xl font-bold">
-                Welcome to Analyst AI
-              </h2>
-
+              <h2 className="text-4xl font-bold">Welcome to Analyst AI</h2>
               <p className="mt-3 max-w-md text-muted-foreground">
-                Analyze reports, compare companies, summarize financial
-                statements, or ask any business-related questions.
+                Analyze reports, compare companies, summarize financial statements, or ask any business-related questions.
               </p>
-
               <div className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
-                   "Which hedge funds have the highest AUM?",
-                   "Show the top holdings of Citadel Advisors",
-                   "Compare Bridgewater Associates and Renaissance Technologies",
-                   "Which funds hold NVIDIA stock?",
+                  "Which hedge funds have the highest AUM?",
+                  "Show the top holdings of Citadel Advisors",
+                  "Compare Bridgewater Associates and Renaissance Technologies",
+                  "Which funds hold NVIDIA stock?",
                 ].map((prompt) => (
                   <button
                     key={prompt}
@@ -170,26 +171,32 @@ export default function Chat({ initialMessages }: ChatProps) {
             </div>
           ) : (
             <>
-              {messages.map((message: any) => (
-                <div
-                  key={message.id}
-                  className={`mb-6 flex ${
-                    message.role === "user"
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
-                >
+              {messages.map((message: any) => {
+                const isLast = message.id === lastMessage?.id;
+                const isLive = isLast && message.role === 'assistant' && isBusy;
+                const { reasoning, tools } = getThoughtParts(message);
+                const textPart = message.parts?.find((p: any) => p.type === 'text');
+                const hasText = textPart && 'text' in textPart && textPart.text.trim();
+
+                return (
                   <div
-                    className={`max-w-[80%] rounded-3xl px-5 py-4 shadow-sm ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "border bg-card"
-                    }`}
+                    key={message.id}
+                    className={`mb-6 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    {message.parts?.map((part: any, index: number) =>
-                      part.type === "text" ? (
-                        message.role === "assistant" ? (
-                          <div key={index} className="prose prose-sm dark:prose-invert max-w-none">
+                    <div
+                      className={`max-w-[80%] ${
+                        message.role === 'user'
+                          ? 'rounded-3xl bg-primary px-5 py-4 text-primary-foreground shadow-sm'
+                          : 'w-full'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <ThoughtBlock reasoning={reasoning} tools={tools} live={isLive} />
+                      )}
+
+                      {message.role === 'assistant' && hasText && (
+                        <div className="rounded-3xl border bg-card px-5 py-4 shadow-sm">
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
@@ -200,21 +207,13 @@ export default function Chat({ initialMessages }: ChatProps) {
                                     </table>
                                   </div>
                                 ),
-                                thead: ({ children }) => (
-                                  <thead className="bg-muted">{children}</thead>
-                                ),
-                                tbody: ({ children }) => (
-                                  <tbody>{children}</tbody>
-                                ),
-                                tr: ({ children }) => (
-                                  <tr className="border-b border-border">{children}</tr>
-                                ),
+                                thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+                                tbody: ({ children }) => <tbody>{children}</tbody>,
+                                tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
                                 th: ({ children }) => (
                                   <th className="px-4 py-2 text-left font-semibold text-sm">{children}</th>
                                 ),
-                                td: ({ children }) => (
-                                  <td className="px-4 py-2 text-sm">{children}</td>
-                                ),
+                                td: ({ children }) => <td className="px-4 py-2 text-sm">{children}</td>,
                                 code: ({ children, className }) => {
                                   const match = /language-(\w+)/.exec(className || '');
                                   return match ? (
@@ -222,35 +221,31 @@ export default function Chat({ initialMessages }: ChatProps) {
                                       <code className={className}>{children}</code>
                                     </pre>
                                   ) : (
-                                    <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                                    <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
+                                      {children}
+                                    </code>
                                   );
                                 },
                               }}
                             >
-                              {part.text}
+                              {textPart.text}
                             </ReactMarkdown>
                           </div>
-                        ) : (
-                          <p
-                            key={index}
-                            className="whitespace-pre-wrap leading-7"
-                          >
-                            {part.text}
-                          </p>
-                        )
-                      ) : null
-                    )}
-                  </div>
-                </div>
-              ))}
+                        </div>
+                      )}
 
-              {isBusy && (
-                <div className="mb-6 flex justify-start">
-                  <div className="rounded-3xl border bg-card px-5 py-4 text-muted-foreground">
-                    Thinking...
+                      {message.role === 'user' &&
+                        message.parts?.map((part: any, index: number) =>
+                          part.type === 'text' ? (
+                            <p key={index} className="whitespace-pre-wrap leading-7">
+                              {part.text}
+                            </p>
+                          ) : null
+                        )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })}
             </>
           )}
 
@@ -258,12 +253,10 @@ export default function Chat({ initialMessages }: ChatProps) {
         </div>
       </main>
 
-      {/* Input */}
       <footer className="border-t bg-background">
         <div className="mx-auto max-w-4xl px-6 py-5">
           <form onSubmit={handleSubmit}>
             <div className="flex items-end gap-3 rounded-3xl border bg-card p-3 shadow-sm">
-
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -282,17 +275,10 @@ export default function Chat({ initialMessages }: ChatProps) {
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>
-
-                <Button
-                  type="submit"
-                  disabled={isBusy || !input.trim()}
-                  className="rounded-full px-6"
-                >
-                  {isBusy ? "..." : "Send"}
+                <Button type="submit" disabled={isBusy || !input.trim()} className="rounded-full px-6">
+                  {isBusy ? '...' : 'Send'}
                 </Button>
               </div>
-
-            
             </div>
           </form>
         </div>
