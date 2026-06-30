@@ -1,4 +1,3 @@
-
 import Chat from './components/Chat';
 import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
@@ -17,6 +16,7 @@ export default async function Home() {
   );
 
   let messages = [];
+  let reasoningLevel = "low"; // default
 
   if (session.userId) {
     const { data } = await supabase
@@ -26,7 +26,20 @@ export default async function Home() {
       .order('created_at', { ascending: true });
 
     messages = data ?? [];
+
+    const { data: userReasoningLevel } = await supabase
+      .from('users')
+      .select('reasoning_level')
+      .eq('id', session.userId)
+      .single();
+
+    reasoningLevel = userReasoningLevel?.reasoning_level ?? "low";
   }
 
-  return <Chat initialMessages={messages} />;
+  return (
+    <Chat
+      initialMessages={messages}
+      reasoningLevel={reasoningLevel}
+    />
+  );
 }

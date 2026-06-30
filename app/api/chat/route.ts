@@ -24,7 +24,13 @@ export async function POST(request: Request) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const { messages }: { messages: UIMessage[] } = await request.json();
+  const {
+    messages,
+    reasoningLevel,
+  }: {
+    messages: UIMessage[];
+    reasoningLevel: 'low' | 'medium' | 'high';
+  } = await request.json();
 
   const result = streamText({
     model: chatModel,
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
     stopWhen: stepCountIs(20),
     providerOptions: {
       openai: {
-        reasoningEffort: 'high',
+        reasoningEffort: reasoningLevel || 'low',
         reasoningSummary: 'detailed'
       },
     },

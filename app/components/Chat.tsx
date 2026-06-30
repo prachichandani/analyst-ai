@@ -12,12 +12,14 @@ import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
 
 interface ChatProps {
   initialMessages: any[];
+  reasoningLevel?: string;
 }
 
-export default function Chat({ initialMessages }: ChatProps) {
+export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   const router = useRouter();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentReasoningLevel, setCurrentReasoningLevel] = useState(reasoningLevel);
 
   const { messages, sendMessage, status, setMessages } = useChat({
     messages: initialMessages.map((msg) => ({
@@ -63,7 +65,7 @@ export default function Chat({ initialMessages }: ChatProps) {
             role: 'assistant',
             content,
             tool_data: toolData.length > 0 ? toolData : undefined,
-            metadata: reasoning ? { reasoning } : undefined,
+            metadata: reasoning ? { reasoning, reasoningLevel } : undefined,
           }),
         });
       } catch (error) {
@@ -97,7 +99,35 @@ export default function Chat({ initialMessages }: ChatProps) {
       console.error('Failed to save user message:', err);
     }
 
-    sendMessage({ text });
+    sendMessage(
+      { text },
+      {
+        body: {
+          reasoningLevel: currentReasoningLevel,
+        },
+      }
+    );
+  };
+  const handleReasoningChange = async (value: 'low' | 'medium' | 'high') => {
+    setCurrentReasoningLevel(value);
+
+    try {
+      const res = await fetch('/api/users/reasoning', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reasoningLevel: value,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update reasoning level');
+      }
+    } catch (err) {
+      console.error('Failed to update reasoning level:', err);
+    }
   };
 
   const handleClearChat = async () => {
@@ -264,7 +294,19 @@ export default function Chat({ initialMessages }: ChatProps) {
                 disabled={isBusy}
                 className="max-h-48 min-h-[60px] flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
               />
+
               <div className="flex items-center gap-2">
+                <select
+                  value={currentReasoningLevel}
+                  onChange={(e) => handleReasoningChange(e.target.value as 'low' | 'medium' | 'high')}
+                  disabled={isBusy}
+                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Med</option>
+                  <option value="high">High</option>
+                </select>
+
                 <Button
                   type="button"
                   variant="ghost"
@@ -275,8 +317,13 @@ export default function Chat({ initialMessages }: ChatProps) {
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>
-                <Button type="submit" disabled={isBusy || !input.trim()} className="rounded-full px-6">
-                  {isBusy ? '...' : 'Send'}
+
+                <Button
+                  type="submit"
+                  disabled={isBusy || !input.trim()}
+                  className="rounded-full px-6"
+                >
+                  {isBusy ? "..." : "Send"}
                 </Button>
               </div>
             </div>
