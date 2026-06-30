@@ -4,19 +4,30 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
 
 function getThoughtParts(message: any) {
-  if (!message?.parts) return { reasoning: '', tools: [] as any[] };
+  if (!message?.parts && !message?.metadata) return { reasoning: '', tools: [] as any[] };
 
-  const reasoningPart = message.parts.find((p: any) => p.type === 'reasoning');
-  const reasoning = reasoningPart && 'text' in reasoningPart ? reasoningPart.text : '';
+  const reasoningPart = message.parts?.find((p: any) => p.type === 'reasoning');
+  const reasoningFromParts = reasoningPart && 'text' in reasoningPart ? reasoningPart.text : '';
+  const reasoningFromMetadata = message.metadata?.reasoning || '';
+  const reasoning = reasoningFromParts || reasoningFromMetadata;
 
-  const tools = message.parts
-    .filter((p: any) => p.type && p.type.startsWith('tool-'))
+  const toolsFromParts = message.parts
+    ?.filter((p: any) => p.type && p.type.startsWith('tool-'))
     .map((p: any) => ({
       name: p.type.replace('tool-', ''),
       input: p.input,
       output: p.output,
-      state: p.state, // 'input-streaming' | 'input-available' | 'output-available' | 'output-error'
-    }));
+      state: p.state,
+    })) || [];
+
+  const toolsFromMetadata = (message.metadata?.toolData as any[])?.map((t: any) => ({
+    name: t.toolName,
+    input: t.args,
+    output: t.result,
+    state: 'output-available',
+  })) || [];
+
+  const tools = toolsFromParts.length > 0 ? toolsFromParts : toolsFromMetadata;
 
   return { reasoning, tools };
 }
@@ -28,16 +39,12 @@ interface ThoughtBlockProps {
 }
 
 export function ThoughtBlock({ reasoning, tools, live }: ThoughtBlockProps) {
-  const [open, setOpen] = useState(false);
-
-  // keep it open while live, collapse when done
-  useEffect(() => {
-    if (live) setOpen(true);
-    if (!live) setOpen(false);
-  }, [live]);
+  const [userOpen, setUserOpen] = useState(false);
+  const open = live || userOpen;
 
   if (!reasoning && tools.length === 0) return null;
 
+  const toolNames = tools.map((t) => t.name);
   const summary = live
     ? tools.length > 0
       ? `Calling ${tools[tools.length - 1].name}...`
@@ -48,7 +55,7 @@ export function ThoughtBlock({ reasoning, tools, live }: ThoughtBlockProps) {
     <div className="mb-3 text-sm">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setUserOpen((o) => !o)}
         className="flex items-center gap-2 text-left text-muted-foreground hover:text-foreground transition-colors"
       >
         <span className="flex items-center gap-2">
@@ -61,26 +68,16 @@ export function ThoughtBlock({ reasoning, tools, live }: ThoughtBlockProps) {
       </button>
 
       {open && (
-        <div className="space-y-3 mt-2 pl-6">
-          {reasoning && (
-            <div className="whitespace-pre-wrap text-muted-foreground">{reasoning}</div>
-          )}
-
+        <div className="mt-2 pl-6 space-y-2">
           {tools.map((tool, i) => (
-            <div key={i} className="rounded-lg border bg-background p-2">
-              <div className="font-mono text-xs font-medium text-foreground">
-                {tool.name}
-                {tool.state && tool.state !== 'output-available' && (
-                  <span className="ml-2 text-muted-foreground">({tool.state})</span>
-                )}
-              </div>
-              {tool.input && (
-                <pre className="mt-1 overflow-x-auto text-xs text-muted-foreground">
-                  {typeof tool.input === 'string' ? tool.input : JSON.stringify(tool.input, null, 2)}
-                </pre>
-              )}
+            <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="text-green-500">✓</span>
+              <span className="font-mono text-xs">{tool.name}</span>
             </div>
           ))}
+          {reasoning && (
+            <div className="whitespace-pre-wrap text-muted-foreground pt-2">{reasoning}</div>
+          )}
         </div>
       )}
     </div>

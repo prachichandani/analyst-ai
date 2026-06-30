@@ -12,7 +12,7 @@ import { tool } from 'ai';
 
 export const renderChart = tool({
   description:
-    'Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape.',
+    "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape.When naming fields in chart data, use clear suffixes so values render correctly: dollar amounts should include 'usd', 'aum', or 'value' in the key name (e.g. aum_usd, value_usd); percentages should include 'pct', 'return', 'alpha', or 'rate' (e.g. estimated_return_pct); dates should stay in ISO format (YYYY-MM-DD); quarters should stay in 'YYYYQ#' format (e.g. 2021Q3).",
   inputSchema: z.object({
     chartType: z.enum(['bar', 'line', 'pie', 'area', 'scatter', 'table']),
     title: z.string(),
