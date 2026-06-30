@@ -9,6 +9,7 @@ import { LogOut, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
+import { ChartRenderer } from './ChartRenderer';
 
 interface ChatProps {
   initialMessages: any[];
@@ -25,10 +26,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
     messages: initialMessages.map((msg) => ({
       id: msg.id,
       role: msg.role,
-      parts: [  
-        ...(msg.metadata?.reasoning
-          ? [{ type: 'reasoning', text: msg.metadata.reasoning }]
-          : []),
+      parts: [ 
         ...(msg.tool_data ?? []).map((t: any) => ({
           type: `tool-${t.toolName}`,
           input: t.args,
@@ -71,6 +69,9 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
       } catch (error) {
         console.error('Failed to save assistant message:', error);
       }
+    },
+    onError: (error) => {
+      console.error('Chat error:', error);
     },
   });
 
@@ -145,6 +146,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   };
 
   const isBusy = status === 'streaming' || status === 'submitted';
+  const hasError = status === 'error';
 
   const handleLogout = async () => {
     try {
@@ -208,6 +210,11 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                 const textPart = message.parts?.find((p: any) => p.type === 'text');
                 const hasText = textPart && 'text' in textPart && textPart.text.trim();
 
+                // NEW: pull out chart tool calls separately from the reasoning trail
+                const chartParts = message.parts?.filter(
+                  (p: any) => p.type === 'tool-renderChart' && p.output
+                ) ?? [];
+
                 return (
                   <div
                     key={message.id}
@@ -223,6 +230,12 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                       {message.role === 'assistant' && (
                         <ThoughtBlock reasoning={reasoning} tools={tools} live={isLive} />
                       )}
+
+                      {/* NEW: render any charts the model decided to call */}
+                      {message.role === 'assistant' &&
+                        chartParts.map((p: any, i: number) => (
+                          <ChartRenderer key={i} spec={p.output} />
+                        ))}
 
                       {message.role === 'assistant' && hasText && (
                         <div className="rounded-3xl border bg-card px-5 py-4 shadow-sm">
@@ -278,7 +291,13 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
               })}
             </>
           )}
-
+          {hasError && (
+          <div className="mb-6 flex justify-start">
+            <div className="max-w-[80%] rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Something went wrong generating a response. You can try sending your message again.
+            </div>
+          </div>
+        )}
           <div ref={messagesEndRef} />
         </div>
       </main>
