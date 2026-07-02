@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   formatCategoryLabel,
   formatCompactNumber,
@@ -24,8 +25,8 @@ export interface ReportOptions {
 }
 
 interface KPIData {
-  topFundName: string;
-  topFundValue: string;
+  topAssetName: string;
+  topAssetValue: string;
   totalAUM: string;
   avgAUM: string;
   fundCount: number;
@@ -105,43 +106,16 @@ function formatTableValue(col: string, raw: string | number): string {
 // ─── SVG capture ─────────────────────────────────────────────────────────────
 
 async function captureChart(element: HTMLElement): Promise<string | null> {
-  const svg = element.querySelector('svg');
-  if (!svg) return null;
+  if (!element) return null;
 
-  const width  = svg.clientWidth  || 800;
-  const height = svg.clientHeight || 340;
-
-  const clone = svg.cloneNode(true) as SVGElement;
-  clone.setAttribute('width',  String(width));
-  clone.setAttribute('height', String(height));
-
-  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  bg.setAttribute('width', '100%');
-  bg.setAttribute('height', '100%');
-  bg.setAttribute('fill', '#ffffff');
-  clone.insertBefore(bg, clone.firstChild);
-
-  const svgData = new XMLSerializer().serializeToString(clone);
-  const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(svgBlob);
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width  = width  * 2;
-      canvas.height = height * 2;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.scale(2, 2);
-      ctx.drawImage(img, 0, 0, width, height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
-    img.src = url;
+  const canvas = await html2canvas(element, {
+    backgroundColor: '#ffffff',
+    scale: 2,           // retina-sharp output for print
+    useCORS: true,
+    logging: false,
   });
+
+  return canvas.toDataURL('image/png');
 }
 
 // ─── Claude API calls — all 3 in parallel ────────────────────────────────────
@@ -190,7 +164,7 @@ function drawKPICards(pdf: jsPDF, kpis: KPIData, y: number): number {
   const cardH = 64;
 
   const cards = [
-    { label: 'LARGEST FUND',                        value: kpis.topFundValue,       sub: kpis.topFundName },
+    { label: 'LARGEST ASSET',                        value: kpis.topAssetValue,       sub: kpis.topAssetName },
     { label: 'TOTAL AUM',                            value: kpis.totalAUM,           sub: `${kpis.fundCount} funds combined` },
     { label: kpis.concentrationLabel.toUpperCase(),  value: `${kpis.concentration}%`, sub: 'share of total AUM' },
     { label: 'AVERAGE AUM',                          value: kpis.avgAUM,             sub: 'per fund' },

@@ -70,15 +70,14 @@ function YAxisTick({ x, y, payload, dataKey }: any) {
 
 function XAxisTick({ x, y, payload }: any) {
   const label = truncateLabel(formatCategoryLabel(payload.value), 12);
-  const shouldRotate = label.length > 8;
   return (
     <g transform={`translate(${x},${y})`}>
       <text
         dy={10}
-        textAnchor={shouldRotate ? 'end' : 'middle'}
+        textAnchor="end"
         fontSize={12}
         fill={CHART_COLORS.mutedForeground}
-        transform={shouldRotate ? 'rotate(-35)' : undefined}
+        transform="rotate(-35)"
       >
         {label}
       </text>

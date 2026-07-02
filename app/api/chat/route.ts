@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       queryDatabase,
       renderChart,
     },
-    stopWhen: stepCountIs(20),
+    stopWhen: stepCountIs(50),
     providerOptions: {
       openai: {
         reasoningEffort: reasoningLevel || 'low',

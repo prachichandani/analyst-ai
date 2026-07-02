@@ -43,7 +43,7 @@ const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: b
 
         {message.role === 'assistant' &&
           chartParts.map((p: any, i: number) => (
-            <ChartRenderer key={i} spec={p.output} />
+            <ChartRenderer key={`${message.id}-chart-${i}`} spec={p.output} />
           ))}
 
         {message.role === 'assistant' && hasText && (
