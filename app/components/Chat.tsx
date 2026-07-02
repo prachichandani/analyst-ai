@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -20,23 +20,20 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [currentReasoningLevel, setCurrentReasoningLevel] = useState(reasoningLevel);
 
-  const mappedInitialMessages = useMemo(() => 
+  const [chatMessages] = useState(() =>
     initialMessages.map((msg) => ({
       id: msg.id,
       role: msg.role,
-      parts: [
-        { type: 'text' as const, text: msg.content },
-      ],
+      parts: [{ type: 'text' as const, text: msg.content }],
       metadata: {
         ...msg.metadata,
         toolData: msg.tool_data,
       },
-    })),
-    [initialMessages]
+    }))
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({
-    messages: mappedInitialMessages,
+    messages: chatMessages,
     onFinish: async (response) => {
       await handleChatFinish(response, currentReasoningLevel);
     },
@@ -44,7 +41,6 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
       console.error('Chat error:', error);
     },
   });
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
