@@ -20,8 +20,11 @@ export interface ReportOptions {
   yKeys: string[];
   chartType?: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table';
   sourceNote?: string;
-  /** Max appendix rows to render, so the report reliably stays to 2 pages. Default 15. */
+  /** Max appendix rows to render, so the report reliably stays compact. Default 15. */
   maxAppendixRows?: number;
+  /** Max rows for full-table reports (chartType === 'table'), where the table
+   *  IS the report rather than a supporting appendix. Default 200. */
+  maxTableRows?: number;
 }
 
 interface KPIData {
@@ -101,6 +104,18 @@ function formatTableValue(col: string, raw: string | number): string {
     return formatCompactNumber(raw);
   }
   return formatCategoryLabel(String(raw ?? ''));
+}
+
+/** Advances to a new page if `needed` more points of vertical space won't
+ *  fit above the footer zone. Pure function — returns the (possibly reset)
+ *  y position rather than mutating anything, so it composes across helpers
+ *  that don't share a closure. */
+function ensureSpace(pdf: jsPDF, y: number, needed: number, pageHeight: number): number {
+  if (y + needed > pageHeight - MARGIN - 32) {
+    pdf.addPage();
+    return MARGIN;
+  }
+  return y;
 }
 
 // ─── SVG capture ─────────────────────────────────────────────────────────────
@@ -248,11 +263,8 @@ function drawInsightGrid(pdf: jsPDF, rawInsights: unknown[], y: number, pageWidt
     const wrapped = pair.map(item => pdf.setFontSize(9.5) && pdf.splitTextToSize(item.body, textW));
     const rowH = Math.max(...wrapped.map(lines => lines.length * 13), 1) + rowPad + 20;
 
-    // A row must fully fit above the footer zone, or it goes to a new page —
-    // this is what was missing before, letting row 2 collide with the footer.
-    if (y + rowH > pageHeight - MARGIN - 32) {
-      pdf.addPage();
-      y = MARGIN;
+    y = ensureSpace(pdf, y, rowH, pageHeight);
+    if (y === MARGIN) {
       y = sectionHeader(pdf, 'Analyst Insights (cont.)', y, pageWidth);
     }
 
@@ -295,6 +307,168 @@ function drawInsightGrid(pdf: jsPDF, rawInsights: unknown[], y: number, pageWidt
   return y + SP.sm;
 }
 
+// ─── Native data table — reused for both chart appendices and full-table reports ──
+
+interface DrawDataTableOptions {
+  pdf: jsPDF;
+  data: Record<string, string | number>[];
+  /** Columns to render, in order. Pass [xKey, ...yKeys] for a chart appendix,
+   *  or Object.keys(data[0]) for a full-table report. */
+  columns: string[];
+  y: number;
+  pageWidth: number;
+  pageHeight: number;
+  /** Cap on rows rendered. Remaining rows are summarized as "+N not shown". */
+  maxRows?: number;
+  /** Column used to sort descending and (if numeric) compute a "% of Total"
+   *  column. Omit to render rows in their given order with no % column. */
+  primaryKey?: string;
+  /** Label used on continuation headers when columns must be chunked. */
+  sectionTitle?: string;
+}
+
+/** Minimum usable column width in points. Below this, an 8.5pt label plus a
+ *  few characters of value data stops being legible — that's the trigger
+ *  for chunking columns into multiple stacked tables instead of squeezing
+ *  everything onto one unreadable page. */
+const MIN_COL_W = 70;
+const RANK_W = 26;
+const PCT_W = 60;
+const ROW_H = 20;
+
+function drawDataTable(opts: DrawDataTableOptions): number {
+  const {
+    pdf, data, columns, pageWidth, pageHeight,
+    maxRows = 15, primaryKey, sectionTitle = 'Data',
+  } = opts;
+  let y = opts.y;
+
+  if (columns.length === 0 || data.length === 0) return y;
+
+  const hasTotal = !!primaryKey && data.some(r => typeof r[primaryKey] === 'number');
+  const total = hasTotal
+    ? data.reduce((sum, r) => sum + (typeof r[primaryKey!] === 'number' ? (r[primaryKey!] as number) : 0), 0)
+    : 0;
+
+  // Cap + sort so the table stays compact and shows the entries that matter
+  // most, rather than truncating arbitrarily mid-list.
+  const sorted = hasTotal
+    ? [...data].sort((a, b) => {
+        const av = typeof a[primaryKey!] === 'number' ? (a[primaryKey!] as number) : -Infinity;
+        const bv = typeof b[primaryKey!] === 'number' ? (b[primaryKey!] as number) : -Infinity;
+        return bv - av;
+      })
+    : data;
+  const shown  = sorted.slice(0, maxRows);
+  const hidden = sorted.length - shown.length;
+
+  // ── Column chunking ──
+  // If every column fits at MIN_COL_W, render one table. Otherwise split
+  // columns into groups that each fit CONTENT_WIDTH, always repeating the
+  // first ("anchor") column in every chunk so a row stays identifiable
+  // no matter which chunk you're looking at.
+  const available = CONTENT_WIDTH - RANK_W - (hasTotal ? PCT_W : 0);
+  const maxColsPerChunk = Math.max(1, Math.floor(available / MIN_COL_W));
+
+  let chunks: string[][];
+  if (columns.length <= maxColsPerChunk) {
+    chunks = [columns];
+  } else {
+    const anchor = columns[0];
+    const rest = columns.slice(1);
+    const perChunk = Math.max(1, maxColsPerChunk - 1);
+    chunks = [];
+    for (let i = 0; i < rest.length; i += perChunk) {
+      chunks.push([anchor, ...rest.slice(i, i + perChunk)]);
+    }
+    if (chunks.length === 0) chunks = [[anchor]];
+  }
+
+  chunks.forEach((cols, chunkIdx) => {
+    y = ensureSpace(pdf, y, 80, pageHeight);
+    if (chunkIdx > 0) {
+      y = sectionHeader(pdf, `${sectionTitle} — continued (${chunkIdx + 1}/${chunks.length})`, y, pageWidth);
+    }
+
+    // Only the chunk that actually contains primaryKey gets the % column.
+    const showPctHere = hasTotal && cols.includes(primaryKey!);
+    const dataW = CONTENT_WIDTH - RANK_W - (showPctHere ? PCT_W : 0);
+    const colW  = dataW / cols.length;
+
+    // Header row
+    fc(pdf, C.slate100);
+    dc(pdf, C.slate200);
+    pdf.setLineWidth(0.5);
+    pdf.rect(MARGIN, y, CONTENT_WIDTH, ROW_H, 'FD');
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.5);
+    tc(pdf, C.slate500);
+    pdf.text('#', MARGIN + 8, y + 13.5);
+
+    cols.forEach((col, i) => {
+      const label = humanizeFieldName(col);
+      const trunc = pdf.splitTextToSize(label, colW - 8)[0];
+      pdf.text(trunc, MARGIN + RANK_W + i * colW + 6, y + 13.5);
+    });
+    if (showPctHere) {
+      pdf.text('% of Total', MARGIN + RANK_W + dataW + 6, y + 13.5);
+    }
+
+    y += ROW_H;
+
+    shown.forEach((row, rowIdx) => {
+      y = ensureSpace(pdf, y, ROW_H, pageHeight);
+
+      if (rowIdx % 2 === 1) {
+        fc(pdf, C.slate50);
+        pdf.rect(MARGIN, y, CONTENT_WIDTH, ROW_H, 'F');
+      }
+
+      dc(pdf, C.slate200);
+      pdf.setLineWidth(0.3);
+      pdf.line(MARGIN, y + ROW_H, pageWidth - MARGIN, y + ROW_H);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      tc(pdf, C.accent);
+      pdf.text(String(rowIdx + 1), MARGIN + 8, y + 13.5);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      tc(pdf, C.slate700);
+
+      cols.forEach((col, i) => {
+        const formatted = formatTableValue(col, row[col]);
+        const trunc = pdf.splitTextToSize(formatted, colW - 8)[0] ?? '';
+        pdf.text(trunc, MARGIN + RANK_W + i * colW + 6, y + 13.5);
+      });
+
+      if (showPctHere) {
+        const val = row[primaryKey!];
+        const pct = typeof val === 'number' ? ((val / total) * 100).toFixed(1) + '%' : '—';
+        tc(pdf, C.slate500);
+        pdf.text(pct, MARGIN + RANK_W + dataW + 6, y + 13.5);
+      }
+
+      y += ROW_H;
+    });
+
+    y += SP.sm;
+  });
+
+  if (hidden > 0) {
+    y = ensureSpace(pdf, y, 16, pageHeight);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(7.5);
+    tc(pdf, C.slate400);
+    pdf.text(`+ ${hidden} additional ${hidden === 1 ? 'entry' : 'entries'} not shown`, MARGIN, y + 8);
+    y += 12;
+  }
+
+  return y;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function generateChartReportPDF({
@@ -307,10 +481,15 @@ export async function generateChartReportPDF({
   chartType,
   sourceNote = 'Generated by Analyst AI · Internal fund database',
   maxAppendixRows = 15,
+  maxTableRows = 200,
 }: ReportOptions) {
 
+  const isTableReport = chartType === 'table';
+
   const [chartImage, executiveSummary, kpis, insights] = await Promise.all([
-    captureChart(chartElement),
+    // Table reports render their data natively via drawDataTable() — no
+    // screenshot needed, so skip the html2canvas pass entirely.
+    isTableReport ? Promise.resolve(null) : captureChart(chartElement),
     generateExecutiveSummary(title, data, xKey, yKeys),
     generateKPIs(data, xKey, yKeys),
     generateDeepInsights(title, data, xKey, yKeys),
@@ -322,14 +501,11 @@ export async function generateChartReportPDF({
   let y = 0;
 
   const checkBreak = (needed: number) => {
-    if (y + needed > pageHeight - MARGIN - 32) {
-      pdf.addPage();
-      y = MARGIN;
-    }
+    y = ensureSpace(pdf, y, needed, pageHeight);
   };
 
   // ══════════════════════════════════════════════════════
-  // PAGE 1 — Overview: headline, summary, KPIs, chart
+  // PAGE 1 — Overview: headline, summary, KPIs, chart/table
   // ══════════════════════════════════════════════════════
 
   fc(pdf, C.ink);
@@ -394,13 +570,31 @@ export async function generateChartReportPDF({
     pdf.roundedRect(MARGIN - 10, y - 10, imgWidth + 20, imgHeight + 20, 6, 6, 'FD');
     pdf.addImage(chartImage, 'PNG', MARGIN, y, imgWidth, imgHeight);
     y += imgHeight + SP.xl;
+  } else if (isTableReport && data.length > 0) {
+    // Full-table report: the table itself IS the primary content, rendered
+    // natively (crisp, selectable, paginates cleanly) instead of as a
+    // screenshotted image.
+    checkBreak(80);
+    y = sectionHeader(pdf, 'Full Data Table', y, pageWidth);
+    y = drawDataTable({
+      pdf,
+      data,
+      columns: Object.keys(data[0]),
+      y,
+      pageWidth,
+      pageHeight,
+      maxRows: maxTableRows,
+      primaryKey: yKeys[0],
+      sectionTitle: 'Data Table',
+    });
+    y += SP.lg;
   }
 
   // ══════════════════════════════════════════════════════
   // PAGE 2 — Insights + Appendix
   // (no forced addPage — the content naturally starts a new
   //  page via checkBreak once page 1 is full, keeping the
-  //  report to exactly 2 pages for typical dataset sizes)
+  //  report compact for typical dataset sizes)
   // ══════════════════════════════════════════════════════
 
   if (insights.length > 0) {
@@ -409,104 +603,22 @@ export async function generateChartReportPDF({
     y = drawInsightGrid(pdf, insights, y, pageWidth, pageHeight);
   }
 
-  if (chartType !== 'table') {
+  // Table reports already rendered their full data above — no separate
+  // appendix needed. Every other chart type gets a supporting data appendix.
+  if (!isTableReport) {
     checkBreak(80);
     y = sectionHeader(pdf, 'Appendix — Underlying Data', y, pageWidth);
-
-    const primaryKey = yKeys[0];
-    const total = data.reduce((sum, row) => {
-      const val = row[primaryKey];
-      return sum + (typeof val === 'number' ? val : 0);
-    }, 0);
-    const hasTotal = total > 0;
-
-    // Cap + sort so the appendix stays compact and shows the entries that
-    // matter most, rather than truncating arbitrarily mid-list.
-    const sorted = hasTotal
-      ? [...data].sort((a, b) => {
-          const av = typeof a[primaryKey] === 'number' ? (a[primaryKey] as number) : -Infinity;
-          const bv = typeof b[primaryKey] === 'number' ? (b[primaryKey] as number) : -Infinity;
-          return bv - av;
-        })
-      : data;
-    const shown    = sorted.slice(0, maxAppendixRows);
-    const hidden   = sorted.length - shown.length;
-
-    const RANK_W  = 26;
-    const PCT_W   = hasTotal ? 60 : 0;
-    const dataW   = CONTENT_WIDTH - RANK_W - PCT_W;
-    const allCols = [xKey, ...yKeys];
-    const colW    = dataW / allCols.length;
-    const ROW_H   = 20;
-
-    fc(pdf, C.slate100);
-    dc(pdf, C.slate200);
-    pdf.setLineWidth(0.5);
-    pdf.rect(MARGIN, y, CONTENT_WIDTH, ROW_H, 'FD');
-
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(7.5);
-    tc(pdf, C.slate500);
-    pdf.text('#', MARGIN + 8, y + 13.5);
-
-    allCols.forEach((col, i) => {
-      const label = humanizeFieldName(col);
-      const trunc = pdf.splitTextToSize(label, colW - 8)[0];
-      pdf.text(trunc, MARGIN + RANK_W + i * colW + 6, y + 13.5);
+    y = drawDataTable({
+      pdf,
+      data,
+      columns: [xKey, ...yKeys],
+      y,
+      pageWidth,
+      pageHeight,
+      maxRows: maxAppendixRows,
+      primaryKey: yKeys[0],
+      sectionTitle: 'Appendix',
     });
-    if (hasTotal) {
-      pdf.text('% of Total', MARGIN + RANK_W + dataW + 6, y + 13.5);
-    }
-
-    y += ROW_H;
-
-    shown.forEach((row, rowIdx) => {
-      checkBreak(ROW_H);
-
-      if (rowIdx % 2 === 1) {
-        fc(pdf, C.slate50);
-        pdf.rect(MARGIN, y, CONTENT_WIDTH, ROW_H, 'F');
-      }
-
-      dc(pdf, C.slate200);
-      pdf.setLineWidth(0.3);
-      pdf.line(MARGIN, y + ROW_H, pageWidth - MARGIN, y + ROW_H);
-
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(7.5);
-      tc(pdf, C.accent);
-      pdf.text(String(rowIdx + 1), MARGIN + 8, y + 13.5);
-
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8.5);
-      tc(pdf, C.slate700);
-
-      allCols.forEach((col, i) => {
-        const raw       = row[col];
-        const formatted = formatTableValue(col, raw);
-        const trunc     = pdf.splitTextToSize(formatted, colW - 8)[0] ?? '';
-        pdf.text(trunc, MARGIN + RANK_W + i * colW + 6, y + 13.5);
-      });
-
-      if (hasTotal) {
-        const val = row[primaryKey];
-        const pct = typeof val === 'number'
-          ? ((val / total) * 100).toFixed(1) + '%'
-          : '—';
-        tc(pdf, C.slate500);
-        pdf.text(pct, MARGIN + RANK_W + dataW + 6, y + 13.5);
-      }
-
-      y += ROW_H;
-    });
-
-    if (hidden > 0) {
-      y += SP.xs;
-      pdf.setFont('helvetica', 'italic');
-      pdf.setFontSize(7.5);
-      tc(pdf, C.slate400);
-      pdf.text(`+ ${hidden} additional ${hidden === 1 ? 'entry' : 'entries'} not shown`, MARGIN, y + 8);
-    }
   }
 
   // ── Footer on every page ──
