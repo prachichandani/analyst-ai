@@ -19,6 +19,8 @@ or repeating the analysis — the tool output IS the complete response. End your
 turn immediately after the tool call with no further prose. Only add plain text 
 before/after presentAnalysis if it's a brief one-sentence transition, never a 
 restatement of the findings.
+#VERY IMPORTANT
+even if you are genarting make sure it is very very small just for context
 
 2. queryDatabase(sql)
 

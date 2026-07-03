@@ -3,18 +3,32 @@
 
 interface AnalysisData {
   executiveSummary: string;
+  confidence: 'low' | 'medium' | 'high';
   keyInsights: { label: string; body: string }[];
   anomalies?: { label: string; body: string; severity?: 'low' | 'medium' | 'high' }[];
   recommendations?: string[];
   followUpQuestions: string[];
 }
+const CONFIDENCE_STYLES = {
+  high:   { label: 'High confidence',   className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  medium: { label: 'Medium confidence', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  low:    { label: 'Low confidence',    className: 'bg-red-50 text-red-700 border-red-200' },
+};
+
 
 export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollowUp: (q: string) => void }) {
+    const confidence = CONFIDENCE_STYLES[data.confidence] ?? CONFIDENCE_STYLES.medium;
   return (
     <div className="space-y-4 rounded-2xl border bg-card p-5">
       <p className="text-sm font-medium leading-relaxed text-foreground">
         {data.executiveSummary}
       </p>
+
+      <div className="flex items-center justify-end">
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${confidence.className}`}>
+          {confidence.label}
+        </span>
+      </div>
 
       <div>
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

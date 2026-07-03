@@ -15,6 +15,11 @@ export const presentAnalysis = tool({
     'Use this tool to present the analytical findings after any required data retrieval or visualization has been completed. This tool does not replace other tools such as renderChart. If a chart would help answer the question, call renderChart first, then call presentAnalysis to summarize and explain the findings.',
     inputSchema: z.object({
       executiveSummary: z.string(),
+      confidence: z.enum(['low', 'medium', 'high']).describe(
+        'How confident this analysis is, based on data completeness and sample size. ' +
+        'Use "low" when the dataset is small, has gaps, or the finding is speculative. ' +
+        'Use "high" only when the data clearly and directly supports the conclusion.'
+      ),
       keyInsights: z.array(z.object({
         label: z.string(),
         body: z.string(),
