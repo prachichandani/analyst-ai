@@ -9,6 +9,7 @@ import { executeQuery } from "../../lib/db/executeQuery";
 
 
 import { tool } from 'ai';
+import { openai } from '@ai-sdk/openai';
 
 export const presentAnalysis = tool({
   description:
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
       queryDatabase,
       renderChart,
       presentAnalysis,
+      web_search: openai.tools.webSearch({}),
     },
     stopWhen: stepCountIs(50),
     providerOptions: {

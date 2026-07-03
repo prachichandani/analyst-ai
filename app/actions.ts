@@ -1,3 +1,4 @@
+
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -5,4 +6,4 @@ const openai = createOpenAI({
   apiKey: process.env.LITELLM_API_KEY,
 });
 
-export const chatModel = openai("gpt-5.4-nano");
+export const chatModel = openai.responses("gpt-5.4-nano"); // .responses() instead of the bare call
