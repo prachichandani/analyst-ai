@@ -5,14 +5,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
 import { ChartRenderer } from './ChartRenderer';
+import { AnalysisCard } from './AnalysisCard';
 
-const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: boolean; isBusy: boolean }) => {
+const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
+  message: any; isLast: boolean; isBusy: boolean; onFollowUp: (q: string) => void;
+}) => {
+// const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: boolean; isBusy: boolean }) => {
   const isLive = isLast && message.role === 'assistant' && isBusy;
   const { reasoning, tools } = getThoughtParts(message);
   const textPart = message.parts?.find((p: any) => p.type === 'text');
   const hasText = textPart && 'text' in textPart && textPart.text.trim();
 
   const toolData = message.metadata?.toolData as any[] | undefined;
+
   const chartPartsFromMetadata = toolData?.filter(
     (t: any) => t.toolName === 'renderChart' && t.result
   ).map((t: any) => ({ type: 'tool-renderChart', output: t.result })) ?? [];
@@ -26,10 +31,27 @@ const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: b
                      chartPartsFromTools.length > 0 ? chartPartsFromTools :
                      chartPartsFromMetadata;
 
+  const analysisFromMetadata = toolData?.filter(
+    (t: any) => t.toolName === 'presentAnalysis' && t.args
+  ).map((t: any) => ({ type: 'tool-presentAnalysis', input: t.args })) ?? [];
+  const analysisFromParts = message.parts?.filter(
+    (p: any) => p.type === 'tool-presentAnalysis' && p.input
+  ) ?? [];
+  const analysisFromTools = tools
+    .filter((t: any) => t.name === 'presentAnalysis' && t.input)
+    .map((t: any) => ({ type: 'tool-presentAnalysis', input: t.input })) ?? [];
+  const analysisParts = analysisFromParts.length > 0 ? analysisFromParts :
+                        analysisFromTools.length > 0 ? analysisFromTools :
+                        analysisFromMetadata;
+  const validAnalysisParts = analysisParts.filter(
+    (p: any) =>
+      p.input?.executiveSummary &&
+      Array.isArray(p.input?.keyInsights) &&
+      Array.isArray(p.input?.followUpQuestions)
+  );
+
   return (
-    <div
-      className={`mb-6 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-    >
+    <div className={`mb-6 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[80%] ${
           message.role === 'user'
@@ -46,7 +68,15 @@ const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: b
             <ChartRenderer key={`${message.id}-chart-${i}`} spec={p.output} />
           ))}
 
-        {message.role === 'assistant' && hasText && (
+        {message.role === 'assistant' &&
+          validAnalysisParts.map((p: any, i: number) => (
+            <AnalysisCard
+              key={`${message.id}-analysis-${i}`}
+              data={p.input}
+              onFollowUp={onFollowUp}
+            />
+          ))}
+        {message.role === 'assistant' && hasText && validAnalysisParts.length === 0 && (
           <div className="rounded-3xl border bg-card px-5 py-4 shadow-sm">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown

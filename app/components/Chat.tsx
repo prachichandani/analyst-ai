@@ -33,7 +33,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({
-    messages: chatMessages,
+    experimental_throttle: 150, // also recommended by AI SDK's own troubleshooting docs
     onFinish: async (response) => {
       await handleChatFinish(response, currentReasoningLevel);
     },
@@ -41,6 +41,17 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
       console.error('Chat error:', error);
     },
   });
+
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      setMessages(chatMessages);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sendFollowUp = (text: string) => {
+    setInput(text);
+  };
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -95,6 +106,15 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
     } catch (err) {
       console.error('Failed to update reasoning level:', err);
     }
+  };
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isBusy) {
+        handleSubmit(e as unknown as React.FormEvent);
+      }
+    }
+    // Shift+Enter: do nothing, let the browser insert a newline as normal
   };
 
   const handleClearChat = async () => {
@@ -175,6 +195,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                   message={message}
                   isLast={message.id === lastMessage?.id}
                   isBusy={isBusy}
+                  onFollowUp={sendFollowUp}
                 />
               ))}
             </>
@@ -197,6 +218,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Message Analyst AI..."
                 disabled={isBusy}
                 className="max-h-48 min-h-[60px] flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"

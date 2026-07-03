@@ -10,6 +10,26 @@ import { executeQuery } from "../../lib/db/executeQuery";
 
 import { tool } from 'ai';
 
+export const presentAnalysis = tool({
+  description:
+    'Use this tool to present the analytical findings after any required data retrieval or visualization has been completed. This tool does not replace other tools such as renderChart. If a chart would help answer the question, call renderChart first, then call presentAnalysis to summarize and explain the findings.',
+    inputSchema: z.object({
+      executiveSummary: z.string(),
+      keyInsights: z.array(z.object({
+        label: z.string(),
+        body: z.string(),
+      })).min(1).max(3), // was 5 — smaller cap, less delta volume
+      anomalies: z.array(z.object({
+        label: z.string(),
+        body: z.string(),
+        severity: z.enum(['low', 'medium', 'high']).optional(),
+      })).max(2).optional(), // add a cap here too
+      recommendations: z.array(z.string()).max(3).optional(), // was 4
+      followUpQuestions: z.array(z.string()).min(2).max(3).optional(), // was 4
+    }),
+  execute: async (input) => input,
+});
+
 export const renderChart = tool({
   description:
     "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape.When naming fields in chart data, use clear suffixes so values render correctly: dollar amounts should include 'usd', 'aum', or 'value' in the key name (e.g. aum_usd, value_usd); percentages should include 'pct', 'return', 'alpha', or 'rate' (e.g. estimated_return_pct); dates should stay in ISO format (YYYY-MM-DD); quarters should stay in 'YYYYQ#' format (e.g. 2021Q3).",
@@ -81,6 +101,7 @@ export async function POST(request: Request) {
     tools: {
       queryDatabase,
       renderChart,
+      presentAnalysis,
     },
     stopWhen: stepCountIs(50),
     providerOptions: {
