@@ -76,7 +76,7 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
               onFollowUp={onFollowUp}
             />
           ))}
-        {message.role === 'assistant' && hasText && validAnalysisParts.length === 0 && (
+        {message.role === 'assistant' && hasText &&  (
           <div className="rounded-3xl border bg-card px-5 py-4 shadow-sm">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown

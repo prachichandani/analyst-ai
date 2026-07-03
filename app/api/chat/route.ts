@@ -6,10 +6,10 @@ import { z } from 'zod';
 import { chatModel } from '@/app/actions';
 import { SystemPrompt } from '@/app/lib/prompts/systemprompt';
 import { executeQuery } from "../../lib/db/executeQuery";
-
+import { tvly } from '../../lib/tavily/tavily';
 
 import { tool } from 'ai';
-import { openai } from '@ai-sdk/openai';
+// import { openai } from '@ai-sdk/openai';
 
 export const presentAnalysis = tool({
   description:
@@ -34,6 +34,39 @@ export const presentAnalysis = tool({
       followUpQuestions: z.array(z.string()).min(2).max(3).optional(), // was 4
     }),
   execute: async (input) => input,
+});
+export const webSearch = tool({
+  description:
+    'Search the web for current, real-world information — e.g. recent news about a fund/company, ' +
+    'market events, regulatory filings, recent performance commentary, or anything not present in the ' +
+    'internal database. Use this to supplement, not replace, queryDatabase — database numbers are ground truth, ' +
+    'web search is for context, recency, and qualitative info.',
+  inputSchema: z.object({
+    query: z.string().describe('The search query'),
+    searchDepth: z.enum(['basic', 'advanced']).optional().describe(
+      'Use "advanced" for research-heavy queries needing deeper content, "basic" for quick lookups.'
+    ),
+    topic: z.enum(['general', 'news', 'finance']).optional().describe(
+      'Use "finance" or "news" for fund/market-related queries.'
+    ),
+    maxResults: z.number().min(1).max(10).optional(),
+  }),
+  execute: async ({ query, searchDepth, topic, maxResults }) => {
+    console.log('🔧 [webSearch] input:', { query, searchDepth, topic, maxResults });
+    try {
+      const response = await tvly.search(query, {
+        searchDepth: searchDepth || 'basic',
+        topic: topic || 'general',
+        maxResults: maxResults || 5,
+        includeAnswer: true,
+      });
+      console.log('✅ [webSearch] result:', JSON.stringify(response).slice(0, 500));
+      return response;
+    } catch (err) {
+      console.error('❌ [webSearch] failed:', err);
+      return { error: 'Web search failed right now.' };
+    }
+  },
 });
 
 export const renderChart = tool({
@@ -63,13 +96,20 @@ export const queryDatabase = tool({
   description: 'Execute a read-only PostgreSQL query against the hedge fund database and return the results',
   inputSchema: z.object({
     sql: z.string().describe('The SQL query to execute'),
+    purpose: z.string().describe(
+      'A short, plain-English description (max ~10 words) of what this query is fetching, ' +
+      'e.g. "Fetching top 10 funds by AUM" or "Looking up NVIDIA holdings across funds". ' +
+      'This is shown to the user in the UI, so keep it human-readable, not technical.'
+    ),
   }),
-  execute: async ({ sql }) => {
+  execute: async ({ sql, purpose }) => {
+    console.log('🔧 [queryDatabase] purpose:', purpose, '| sql:', sql);
     try {
       const result = await executeQuery(sql);
+      console.log('✅ [queryDatabase] result:', JSON.stringify(result).slice(0, 500));
       return result;
     } catch (err) {
-      console.error(' queryDatabase failed:', err);
+      console.error('❌ [queryDatabase] failed:', err);
       return { error: 'Could not fetch data right now.' };
     }
   },
@@ -108,7 +148,8 @@ export async function POST(request: Request) {
       queryDatabase,
       renderChart,
       presentAnalysis,
-      web_search: openai.tools.webSearch({}),
+      webSearch,
+      // web_search: openai.tools.webSearch({}),
     },
     stopWhen: stepCountIs(50),
     providerOptions: {

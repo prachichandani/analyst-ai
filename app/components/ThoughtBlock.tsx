@@ -70,9 +70,49 @@ export function ThoughtBlock({ reasoning, tools, live }: ThoughtBlockProps) {
       {open && (
         <div className="mt-2 pl-6 space-y-2">
           {tools.map((tool, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="text-green-500">✓</span>
-              <span className="font-mono text-xs">{tool.name}</span>
+            <div key={i} className="text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="text-green-500">✓</span>
+                <span className="font-mono text-xs">{tool.name}</span>
+
+                {tool.name === 'webSearch' && tool.input?.query && (
+                  <span className="text-xs italic truncate max-w-[300px]">
+                    "{tool.input.query}"
+                  </span>
+                )}
+
+                {tool.name === 'queryDatabase' && tool.input?.purpose && (
+                  <span className="text-xs italic truncate max-w-[300px]">
+                    {tool.input.purpose}
+                  </span>
+                )}
+
+                {tool.name === 'renderChart' && tool.input?.chartType && (
+                  <span className="text-xs italic truncate max-w-[300px]">
+                    {tool.input.chartType} chart — {tool.input.title}
+                  </span>
+                )}
+              </div>
+
+              {tool.name === 'webSearch' &&
+                tool.state === 'output-available' &&
+                tool.output?.results?.length > 0 && (
+                  <ul className="mt-1 ml-6 space-y-0.5">
+                    {tool.output.results.map((r: any, j: number) => (
+                      <li key={j} className="text-xs truncate">
+                        
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:underline"
+                        >
+                          {r.title || r.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
             </div>
           ))}
           {reasoning && (
