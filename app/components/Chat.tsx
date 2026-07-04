@@ -147,11 +147,11 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
-        <div className="flex h-16 items-center justify-between px-6">
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-card/80 backdrop-blur">
+        <div className="flex h-14 items-center justify-between px-6">
           <div>
-            <h1 className="text-lg font-semibold">Analyst AI</h1>
-            <p className="text-xs text-muted-foreground">AI-powered financial assistant</p>
+            <h1 className="text-[0.98rem] font-semibold tracking-tight">Analyst AI</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">Professional financial insights</p>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout}>
             <LogOut className="h-5 w-5" />
@@ -160,17 +160,17 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-4xl flex-col px-6 py-8">
+        <div className="mx-auto flex max-w-4xl flex-col px-6 py-6">
           {messages.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center py-32 text-center">
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground text-3xl">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-muted/60 text-foreground text-3xl shadow-sm">
                 🤖
               </div>
-              <h2 className="text-4xl font-bold">Welcome to Analyst AI</h2>
-              <p className="mt-3 max-w-md text-muted-foreground">
+              <h2 className="text-[2rem] font-bold tracking-tight">Welcome to Analyst AI</h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
                 Analyze reports, compare companies, summarize financial statements, or ask any business-related questions.
               </p>
-              <div className="mt-10 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-9 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
                   "Which hedge funds have the highest AUM?",
                   "Show the top holdings of Citadel Advisors",
@@ -180,7 +180,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                   <button
                     key={prompt}
                     onClick={() => setInput(prompt)}
-                    className="rounded-xl border bg-card p-4 text-left transition hover:bg-muted"
+                    className="rounded-2xl border border-border/60 bg-card p-4 text-left text-sm transition hover:border-border/90 hover:bg-card"
                   >
                     {prompt}
                   </button>
@@ -201,20 +201,20 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
             </>
           )}
           {hasError && (
-          <div className="mb-6 flex justify-start">
-            <div className="max-w-[80%] rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              Something went wrong generating a response. You can try sending your message again.
+            <div className="mb-4 flex justify-start">
+              <div className="max-w-[80%] rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Something went wrong generating a response. You can try sending your message again.
+              </div>
             </div>
-          </div>
-        )}
+          )}
           <div ref={messagesEndRef} />
         </div>
       </main>
 
-      <footer className="border-t bg-background">
-        <div className="mx-auto max-w-4xl px-6 py-5">
+      <footer className="border-t border-border/80 bg-card">
+        <div className="mx-auto max-w-4xl px-6 py-4">
           <form onSubmit={handleSubmit}>
-            <div className="flex items-end gap-3 rounded-3xl border bg-card p-3 shadow-sm">
+            <div className="flex items-end gap-3 rounded-3xl border border-border/80 bg-card p-3 shadow-sm">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -229,7 +229,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                   value={currentReasoningLevel}
                   onChange={(e) => handleReasoningChange(e.target.value as 'low' | 'medium' | 'high')}
                   disabled={isBusy}
-                  className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none"
+                  className="h-9 rounded-xl border border-input bg-card/50 px-3 text-sm outline-none transition hover:bg-card/70"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Med</option>
@@ -243,14 +243,16 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                   onClick={handleClearChat}
                   disabled={messages.length === 0 || isBusy}
                   title="Clear Chat"
+                  className="group"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-destructive disabled:opacity-50" />
                 </Button>
 
                 <Button
                   type="submit"
+                  variant="default"
                   disabled={isBusy || !input.trim()}
-                  className="rounded-full px-6"
+                  className="rounded-full px-6 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   {isBusy ? "..." : "Send"}
                 </Button>

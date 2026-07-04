@@ -16,6 +16,13 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
   const textPart = message.parts?.find((p: any) => p.type === 'text');
   const hasText = textPart && 'text' in textPart && textPart.text.trim();
 
+  // Ensure the "presentAnalysis" block doesn't visually stick to the previous assistant content.
+  // (We base this on reasoning/tools/markdown text; chart spacing is handled separately by the layout.)
+  const hasPriorAssistantContent =
+    Boolean(reasoning && reasoning.trim()) ||
+    (tools?.length ?? 0) > 0 ||
+    Boolean(hasText);
+
   const toolData = message.metadata?.toolData as any[] | undefined;
 
   const chartPartsFromMetadata = toolData?.filter(
@@ -55,7 +62,7 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
       <div
         className={`max-w-[80%] ${
           message.role === 'user'
-            ? 'rounded-3xl bg-primary px-5 py-4 text-primary-foreground shadow-sm'
+            ? 'rounded-3xl bg-muted px-5 py-4 text-foreground shadow-sm'
             : 'w-full'
         }`}
       >
@@ -70,15 +77,16 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
 
         {message.role === 'assistant' &&
           validAnalysisParts.map((p: any, i: number) => (
-            <AnalysisCard
+            <div
               key={`${message.id}-analysis-${i}`}
-              data={p.input}
-              onFollowUp={onFollowUp}
-            />
+              className={i === 0 ? (hasPriorAssistantContent ? 'mt-4' : '') : 'mt-4'}
+            >
+              <AnalysisCard data={p.input} onFollowUp={onFollowUp} />
+            </div>
           ))}
         {message.role === 'assistant' && hasText &&  (
-          <div className="rounded-3xl border bg-card px-5 py-4 shadow-sm">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
+          <div className="rounded-3xl border border-border/60 bg-transparent px-5 py-4">
+            <div className="prose max-w-none font-sans dark:prose-invert prose-p:leading-relaxed prose-p:mt-3 prose-p:mb-0 prose-ul:mt-3 prose-ul:mb-0 prose-ol:mt-3 prose-ol:mb-0 prose-a:font-medium">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -103,7 +111,7 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
                         <code className={className}>{children}</code>
                       </pre>
                     ) : (
-                      <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
+                      <code className="bg-muted px-1.5 py-0.5 rounded text-[0.9rem] font-mono">
                         {children}
                       </code>
                     );
@@ -119,7 +127,7 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
         {message.role === 'user' &&
           message.parts?.map((part: any, index: number) =>
             part.type === 'text' ? (
-              <p key={index} className="whitespace-pre-wrap leading-7">
+              <p key={index} className="whitespace-pre-wrap leading-relaxed">
                 {part.text}
               </p>
             ) : null

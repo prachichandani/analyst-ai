@@ -115,8 +115,8 @@ export function ThoughtBlock({ reasoning, tools, live }: ThoughtBlockProps) {
                 )}
             </div>
           ))}
-          {reasoning && (
-            <div className="whitespace-pre-wrap text-muted-foreground pt-2">{reasoning}</div>
+              {reasoning && (
+            <div className="whitespace-pre-wrap text-muted-foreground pt-2 leading-relaxed">{reasoning}</div>
           )}
         </div>
       )}

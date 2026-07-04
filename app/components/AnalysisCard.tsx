@@ -9,36 +9,37 @@ interface AnalysisData {
   recommendations?: string[];
   followUpQuestions: string[];
 }
+
 const CONFIDENCE_STYLES = {
-  high:   { label: 'High confidence',   className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  medium: { label: 'Medium confidence', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  low:    { label: 'Low confidence',    className: 'bg-red-50 text-red-700 border-red-200' },
+  high:   { label: 'High confidence',   className: 'bg-success/10 text-success' },
+  medium: { label: 'Medium confidence', className: 'bg-warning/10 text-warning' },
+  low:    { label: 'Low confidence',    className: 'bg-destructive/10 text-destructive' },
 };
 
-
 export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollowUp: (q: string) => void }) {
-    const confidence = CONFIDENCE_STYLES[data.confidence] ?? CONFIDENCE_STYLES.medium;
-  return (
-    <div className="space-y-4 rounded-2xl border bg-card p-5">
-      <p className="text-sm font-medium leading-relaxed text-foreground">
-        {data.executiveSummary}
-      </p>
+  const confidence = CONFIDENCE_STYLES[data.confidence] ?? CONFIDENCE_STYLES.medium;
 
-      <div className="flex items-center justify-end">
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${confidence.className}`}>
+  return (
+    <div className="space-y-4 rounded-2xl bg-card/30 p-5 font-sans">
+      <div className="space-y-2">
+        <p className="text-base font-normal leading-relaxed text-foreground">
+          {data.executiveSummary}
+        </p>
+
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${confidence.className}`}
+        >
           {confidence.label}
         </span>
       </div>
 
       <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Key Insights
-        </h4>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <h4 className="mb-3 text-sm font-semibold text-muted-foreground">Key insights</h4>
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {(data.keyInsights ?? []).map((insight, i) => (
-            <div key={i} className="rounded-xl border bg-muted/30 p-3">
-              <p className="text-xs font-semibold text-foreground">{insight.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{insight.body}</p>
+            <div key={i}>
+              <p className="text-sm font-semibold text-foreground">{insight.label}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{insight.body}</p>
             </div>
           ))}
         </div>
@@ -46,13 +47,17 @@ export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollo
 
       {data.anomalies && data.anomalies.length > 0 && (
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600">
-            Anomalies
-          </h4>
+          <h4 className="mb-3 text-sm font-semibold text-warning">Anomalies</h4>
           <div className="space-y-1.5">
             {(data.anomalies ?? []).map((a, i) => (
-              <div key={i} className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs">
-                <span className="font-semibold">{a.label}:</span> {a.body}
+              <div key={i} className="rounded-lg bg-warning/10 p-2.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="inline-flex items-center rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                    {a.severity ? `${a.severity} severity` : 'Anomaly'}
+                  </span>
+                  <span className="text-sm font-semibold text-foreground">{a.label}</span>
+                </div>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
               </div>
             ))}
           </div>
@@ -61,11 +66,14 @@ export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollo
 
       {data.recommendations && data.recommendations.length > 0 && (
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Recommendations
-          </h4>
-          <ul className="space-y-1 text-xs text-foreground">
-            {(data.recommendations ?? []).map((r, i) => <li key={i}>→ {r}</li>)}
+          <h4 className="mb-3 text-sm font-semibold text-muted-foreground">Recommendations</h4>
+          <ul className="space-y-1.5 text-sm leading-relaxed text-foreground">
+            {(data.recommendations ?? []).map((r, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="shrink-0 text-muted-foreground">•</span>
+                <span>{r}</span>
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -74,10 +82,10 @@ export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollo
         {(data.followUpQuestions ?? []).map((q, i) => (
           <button
             key={i}
-            onClick={() => onFollowUp(q)}
-            className="rounded-full border px-3 py-1.5 text-xs transition hover:bg-muted"
+            onClick={() => onFollowUp(q.trim())}
+            className="rounded-full border border-border/70 bg-muted/55 px-3 py-1.5 text-sm transition hover:bg-muted/70"
           >
-            {q}
+            {q.trim()}
           </button>
         ))}
       </div>

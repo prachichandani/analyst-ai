@@ -14,18 +14,10 @@ import {
   formatFullValueByField,
   humanizeFieldName,
   truncateLabel,
-  formatCompactNumber
 } from '@/app/components/chartFormat';
 import { generateChartReportPDF } from '../lib/chart/generateChartReport';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899', '#14b8a6'];
-
-// Literal hex fallbacks for html2canvas — it can't parse lab()/oklch() CSS vars
-const CHART_COLORS = {
-  border: '#e5e7eb',
-  mutedForeground: '#6b7280',
-  muted: '#f3f4f6',
-};
 
 interface ChartSpec {
   chartType: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table';
@@ -43,13 +35,13 @@ function CustomTooltip({ active, payload, label, xKey }: any) {
   const title = label ?? row?.[xKey] ?? '—';
 
   return (
-    <div className="rounded-lg border px-3 py-2 shadow-lg text-sm" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
-      <p className="mb-1 font-medium" style={{ color: '#0f0f0f' }}>{formatCategoryLabel(title)}</p>
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg text-sm">
+      <p className="mb-1 font-medium text-popover-foreground">{formatCategoryLabel(title)}</p>
       {payload.map((entry: any, i: number) => (
-        <div key={i} className="flex items-center gap-2" style={{ color: '#6b7280' }}>
+        <div key={i} className="flex items-center gap-2 text-muted-foreground">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
           <span>{entry.name || entry.dataKey || 'Value'}:</span>
-          <span className="font-medium" style={{ color: '#0f0f0f' }}>
+          <span className="font-medium text-popover-foreground">
             {entry.value !== undefined && entry.value !== null
               ? formatFullValueByField(entry.dataKey, entry.value)
               : '—'}
@@ -62,7 +54,7 @@ function CustomTooltip({ active, payload, label, xKey }: any) {
 
 function YAxisTick({ x, y, payload, dataKey }: any) {
   return (
-    <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fill={CHART_COLORS.mutedForeground}>
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} style={{ fill: 'var(--muted-foreground)' }}>
       {formatValueByField(dataKey, payload.value)}
     </text>
   );
@@ -76,7 +68,7 @@ function XAxisTick({ x, y, payload }: any) {
         dy={10}
         textAnchor="end"
         fontSize={12}
-        fill={CHART_COLORS.mutedForeground}
+        style={{ fill: 'var(--muted-foreground)' }}
         transform="rotate(-35)"
       >
         {label}
@@ -90,28 +82,24 @@ const xAxisProps = {
   tick: <XAxisTick />,
   interval: 0 as const,
   height: 56,
-  axisLine: { stroke: CHART_COLORS.border },
+  axisLine: { stroke: 'var(--border)' },
   tickLine: false,
 };
-
-// ─── Shared download button ────────────────────────────────────────────────────
 
 function DownloadButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button
       onClick={onClick}
       disabled={loading}
-      className="flex shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
     >
       {loading
         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
         : <Download className="h-3.5 w-3.5" />}
-      {loading ? 'Generating…' : 'Download Report'}
+      {loading ? 'Generating…' : 'Download report'}
     </button>
   );
 }
-
-// ─── Main component ────────────────────────────────────────────────────────────
 
 export function ChartRenderer({ spec }: { spec: ChartSpec }) {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -131,7 +119,7 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
 
   if (!data || !Array.isArray(data) || data.length === 0) {
     return (
-      <div className="my-4 rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+      <div className="my-4 rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
         No data available for "{title || 'this chart'}".
       </div>
     );
@@ -158,7 +146,6 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
     }
   };
 
-  // For pie charts, convert string values to numbers for proper rendering
   const processedData = chartType === 'pie'
     ? data.map(row => {
         const newRow = { ...row };
@@ -173,25 +160,23 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
       })
     : data;
 
-  // ---------- Table ----------
   if (chartType === 'table') {
     const columns = Object.keys(data[0]);
     return (
-      <div className="my-4 overflow-hidden rounded-xl border bg-card">
-        <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
+      <div className="my-4 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
           <div>
-            <h4 className="font-semibold">{title}</h4>
+            <h4 className="font-semibold text-foreground">{title}</h4>
             {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
           </div>
           <DownloadButton onClick={handleDownload} loading={downloading} />
         </div>
-        {/* ref wraps the table so html2canvas captures it for the PDF */}
-        <div ref={chartRef} className="overflow-x-auto" style={{ backgroundColor: '#ffffff', color: '#0f0f0f', borderColor: '#e5e7eb', outlineColor: '#6366f1', borderStyle: 'solid', borderWidth: '1px' }}>
-          <table className="min-w-full text-sm" style={{ color: '#0f0f0f', backgroundColor: '#ffffff', borderCollapse: 'collapse' }}>
+        <div ref={chartRef} className="overflow-x-auto bg-card">
+          <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b" style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+              <tr className="border-b border-border bg-muted/50">
                 {columns.map((k) => (
-                  <th key={k} className="px-4 py-2.5 text-left font-medium" style={{ color: '#6b7280', backgroundColor: 'transparent', border: 'none' }}>
+                  <th key={k} className="px-4 py-2.5 text-left font-medium text-muted-foreground">
                     {humanizeFieldName(k)}
                   </th>
                 ))}
@@ -199,9 +184,9 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
             </thead>
             <tbody>
               {data.map((row, i) => (
-                <tr key={i} className="border-b last:border-0" style={{ backgroundColor: i % 2 === 1 ? '#f9fafb' : 'transparent', borderBottom: '1px solid #e5e7eb', color: '#0f0f0f' }}>
+                <tr key={i} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-muted/30' : ''}`}>
                   {columns.map((k) => (
-                    <td key={k} className="px-4 py-2.5" style={{ color: '#0f0f0f', backgroundColor: 'transparent', border: 'none' }}>
+                    <td key={k} className="px-4 py-2.5 font-mono text-foreground">
                       {typeof row[k] === 'number'
                         ? formatFullValueByField(k, row[k] as number)
                         : formatCategoryLabel(row[k])}
@@ -216,23 +201,21 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
     );
   }
 
-  // ---------- Charts ----------
   return (
-    <div className="my-4 rounded-xl border p-5" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+    <div className="my-4 rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h4 className="font-semibold">{title}</h4>
+          <h4 className="font-semibold text-foreground">{title}</h4>
           {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
         </div>
         <DownloadButton onClick={handleDownload} loading={downloading} />
       </div>
 
-      {/* ref wraps only the chart area so html2canvas gets a clean capture */}
-      <div ref={chartRef} style={{ backgroundColor: '#ffffff', color: '#0f0f0f', borderColor: '#e5e7eb', outlineColor: '#6366f1', borderStyle: 'solid', borderWidth: '1px' }}>
+      <div ref={chartRef} className="bg-card">
         <ResponsiveContainer width="100%" height={340}>
           {chartType === 'bar' ? (
             <BarChart data={processedData} margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_COLORS.border} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis dataKey={xKey} {...xAxisProps} />
               <YAxis
                 tick={(p: any) => <YAxisTick {...p} dataKey={yKeys[0]} />}
@@ -240,8 +223,8 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
                 tickLine={false}
                 width={56}
               />
-              <Tooltip content={<CustomTooltip xKey={xKey} />} cursor={{ fill: CHART_COLORS.muted, opacity: 0.4 }} />
-              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10 }} formatter={(v: string) => humanizeFieldName(v)} />
+              <Tooltip content={<CustomTooltip xKey={xKey} />} cursor={{ fill: 'var(--muted)', opacity: 0.4 }} />
+              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10, color: 'var(--muted-foreground)' }} formatter={(v: string) => humanizeFieldName(v)} />
               {yKeys.map((k, i) => (
                 <Bar
                   key={k}
@@ -255,7 +238,7 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
             </BarChart>
           ) : chartType === 'line' ? (
             <LineChart data={processedData} margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_COLORS.border} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis dataKey={xKey} {...xAxisProps} />
               <YAxis
                 tick={(p: any) => <YAxisTick {...p} dataKey={yKeys[0]} />}
@@ -264,7 +247,7 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
                 width={56}
               />
               <Tooltip content={<CustomTooltip xKey={xKey} />} />
-              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10 }} formatter={(v: string) => humanizeFieldName(v)} />
+              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10, color: 'var(--muted-foreground)' }} formatter={(v: string) => humanizeFieldName(v)} />
               {yKeys.map((k, i) => (
                 <Line
                   key={k}
@@ -288,7 +271,7 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_COLORS.border} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
               <XAxis dataKey={xKey} {...xAxisProps} />
               <YAxis
                 tick={(p: any) => <YAxisTick {...p} dataKey={yKeys[0]} />}
@@ -297,7 +280,7 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
                 width={56}
               />
               <Tooltip content={<CustomTooltip xKey={xKey} />} />
-              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10 }} formatter={(v: string) => humanizeFieldName(v)} />
+              <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 13, paddingTop: 10, color: 'var(--muted-foreground)' }} formatter={(v: string) => humanizeFieldName(v)} />
               {yKeys.map((k, i) => (
                 <Area
                   key={k}
@@ -330,13 +313,13 @@ export function ChartRenderer({ spec }: { spec: ChartSpec }) {
               <Legend
                 verticalAlign="bottom"
                 align="center"
-                wrapperStyle={{ fontSize: 13, paddingTop: 10 }}
+                wrapperStyle={{ fontSize: 13, paddingTop: 10, color: 'var(--muted-foreground)' }}
                 formatter={(value: string) => truncateLabel(formatCategoryLabel(value), 22)}
               />
             </PieChart>
           ) : (
             <ScatterChart margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey={xKey} {...xAxisProps} />
               <YAxis
                 dataKey={yKeys[0]}
