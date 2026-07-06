@@ -35,6 +35,45 @@ export const presentAnalysis = tool({
     }),
   execute: async (input) => input,
 });
+export const renderDcaCalculator = tool({
+  description:
+    'Render an interactive financial calculator widget when the user would benefit from ' +
+    'exploring different scenarios (e.g. "what if I invest more/less", "what if returns are higher"). ' +
+    'Use this when the user should be able to adjust inputs themselves and even if user doesn\'t ask for it and you feel the need do it, ' +
+    'not just view a static result when talked about dca just render it okay.',
+  inputSchema: z.object({
+    title: z.string(),
+    defaults: z.object({
+      amount: z.number().describe('Starting contribution/principal amount'),
+      frequency: z.enum(['weekly', 'twice-weekly', 'monthly']).optional(),
+      annualReturnPct: z.number().describe('Expected annual return, e.g. 7 for 7%'),
+      years: z.number(),
+    }),
+    keyInsight: z.string().describe('One sentence explaining the core takeaway'),
+  }),
+  execute: async (input) => input,
+});
+
+export const renderCompoundInterestCalculator = tool({
+  description:
+    'Render an interactive compound interest calculator widget when the user would benefit from ' +
+    'exploring different scenarios (e.g. "what if I invest more/less", "what if returns are higher"). ' +
+    'Use this when the user should be able to adjust inputs themselves and even if user doesn\'t ask for it and you feel the need do it, ' +
+    'not just view a static result when talked about compound interest just render it okay. eg-Calculate the future value of a $50,000 investment over 15 years',
+  inputSchema: z.object({
+    title: z.string(),
+    defaults: z.object({
+      principal: z.number().describe('Starting principal amount'),
+      annualContribution: z.number().describe('Annual contribution amount'),
+      annualReturnPct: z.number().describe('Expected annual return, e.g. 7 for 7%'),
+      years: z.number(),
+      compoundingFrequency: z.enum(['annually', 'quarterly', 'monthly', 'daily']).optional(),
+    }),
+    keyInsight: z.string().describe('One sentence explaining the core takeaway'),
+  }),
+  execute: async (input) => input,
+});
+
 export const webSearch = tool({
   description:
     'Search the web for current, real-world information — e.g. recent news about a fund/company, ' +
@@ -149,6 +188,8 @@ export async function POST(request: Request) {
       renderChart,
       presentAnalysis,
       webSearch,
+      renderDcaCalculator,
+      renderCompoundInterestCalculator,
       // web_search: openai.tools.webSearch({}),
     },
     stopWhen: stepCountIs(50),

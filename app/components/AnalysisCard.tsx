@@ -83,7 +83,7 @@ export function AnalysisCard({ data, onFollowUp }: { data: AnalysisData; onFollo
           <button
             key={i}
             onClick={() => onFollowUp(q.trim())}
-            className="rounded-full border border-border/70 bg-muted/55 px-3 py-1.5 text-sm transition hover:bg-muted/70"
+            className="rounded-full border border-border/70 bg-muted/55 px-3 py-1.5 text-sm transition-all hover:bg-primary/10 hover:border-primary/30 hover:text-primary hover:scale-105 cursor-pointer"
           >
             {q.trim()}
           </button>

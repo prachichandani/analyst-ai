@@ -6,6 +6,10 @@ import remarkGfm from 'remark-gfm';
 import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
 import { ChartRenderer } from './ChartRenderer';
 import { AnalysisCard } from './AnalysisCard';
+import { DCACalculator } from './DSACalculator';
+import { CompoundInterestCalculator } from './CompoundInterestCalculator';
+
+
 
 const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
   message: any; isLast: boolean; isBusy: boolean; onFollowUp: (q: string) => void;
@@ -15,6 +19,12 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
   const { reasoning, tools } = getThoughtParts(message);
   const textPart = message.parts?.find((p: any) => p.type === 'text');
   const hasText = textPart && 'text' in textPart && textPart.text.trim();
+  const calculatorParts = message.parts?.filter(
+    (p: any) => p.type === 'tool-renderDcaCalculator' && p.output
+  ) ?? [];
+  const compoundInterestParts = message.parts?.filter(
+    (p: any) => p.type === 'tool-renderCompoundInterestCalculator' && p.output
+  ) ?? [];
 
   // Ensure the "presentAnalysis" block doesn't visually stick to the previous assistant content.
   // (We base this on reasoning/tools/markdown text; chart spacing is handled separately by the layout.)
@@ -74,6 +84,24 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
           chartParts.map((p: any, i: number) => (
             <ChartRenderer key={`${message.id}-chart-${i}`} spec={p.output} />
           ))}
+          {message.role === 'assistant' &&
+            calculatorParts.map((p: any, i: number) => (
+              <DCACalculator
+                key={`${message.id}-calc-${i}`}
+                title={p.output.title}
+                keyInsight={p.output.keyInsight}
+                defaults={p.output.defaults}
+              />
+            ))}
+          {message.role === 'assistant' &&
+            compoundInterestParts.map((p: any, i: number) => (
+              <CompoundInterestCalculator
+                key={`${message.id}-ci-${i}`}
+                title={p.output.title}
+                keyInsight={p.output.keyInsight}
+                defaults={p.output.defaults}
+              />
+            ))}
 
         {message.role === 'assistant' &&
           validAnalysisParts.map((p: any, i: number) => (
@@ -90,6 +118,27 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  ul: ({ children }) => (
+                    <ul className="my-3 space-y-2 pl-1">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="my-3 space-y-2 pl-5 list-decimal">{children}</ol>
+                  ),
+                  li: ({ children }) => (
+                    <li className="flex gap-2 text-sm leading-relaxed text-foreground">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                      <span>{children}</span>
+                    </li>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="mt-5 mb-2 text-base font-semibold text-foreground first:mt-0">{children}</h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="mt-4 mb-1.5 text-sm font-semibold text-foreground">{children}</h3>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold text-foreground">{children}</strong>
+                  ),
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-4">
                       <table className="min-w-full border-collapse border border-border">
