@@ -5,20 +5,64 @@ import { useChat } from '@ai-sdk/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Trash2 } from 'lucide-react';
+import { LogOut, Trash2, Paperclip, X, Loader2, Check } from 'lucide-react';
 import { handleChatFinish } from '@/app/lib/chatHandlers';
 import MessageItem from './MessageItem';
+import DatabaseDropdown from './DatabaseDropdown';
+
+interface DatabaseFile {
+  id: string;
+  file_name: string;
+  created_at: string;
+}
 
 interface ChatProps {
   initialMessages: any[];
   reasoningLevel?: string;
+  activeDatabaseId?: string | null;
+  activeDatabaseFileName?: string | null;
+  initialDatabases?: DatabaseFile[];
 }
 
-export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
+export default function Chat({
+  initialMessages,
+  reasoningLevel,
+  activeDatabaseId,
+  activeDatabaseFileName,
+  initialDatabases = [], // new
+}: ChatProps) {
   const router = useRouter();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [currentReasoningLevel, setCurrentReasoningLevel] = useState(reasoningLevel);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  
+
+  const [currentActiveDatabaseId, setCurrentActiveDatabaseId] = useState<string | null>(
+    activeDatabaseId ?? null
+  );
+  const [activeDatabaseName, setActiveDatabaseName] = useState<string | null>(
+    activeDatabaseFileName ?? null
+  );
+  const [databases, setDatabases] = useState<DatabaseFile[]>(initialDatabases);
+
+  useEffect(() => {
+    setActiveDatabaseName(activeDatabaseFileName ?? null);
+  }, [activeDatabaseFileName]);
+
+  const fetchDatabases = async () => {
+    try {
+      const res = await fetch('/api/databases');
+      if (!res.ok) return;
+      const data = await res.json();
+      setDatabases(data.databases ?? []);
+    } catch (err) {
+      console.error('Failed to fetch databases:', err);
+    }
+  };
 
   const [chatMessages] = useState(() =>
     initialMessages.map((msg) => ({
@@ -33,7 +77,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({
-    experimental_throttle: 150, // also recommended by AI SDK's own troubleshooting docs
+    experimental_throttle: 150,
     onFinish: async (response) => {
       await handleChatFinish(response, currentReasoningLevel);
     },
@@ -52,16 +96,108 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
   const sendFollowUp = (text: string) => {
     setInput(text);
   };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleDatabaseChange = async (id: string | null) => {
+    setCurrentActiveDatabaseId(id);
+
+    try {
+      const res = await fetch('/api/users/database', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeDatabaseId: id }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update active database');
+    } catch (err) {
+      console.error('Failed to update active database:', err);
+    }
+  };
+
+  const handleDropdownSelect = (id: string | null) => {
+    const file = id ? databases.find((db) => db.id === id) : undefined;
+    setActiveDatabaseName(file?.file_name ?? null);
+    handleDatabaseChange(id);
+  };
+
+  const handleDropdownDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/databases/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete database');
+
+      setDatabases((prev) => prev.filter((db) => db.id !== id));
+
+      if (id === currentActiveDatabaseId) {
+        setCurrentActiveDatabaseId(null);
+        setActiveDatabaseName(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete database:', err);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    setUploadError(null);
+    e.target.value = '';
+  };
+
+  const handleClearFile = () => {
+    setSelectedFile(null);
+    setUploadError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedFile) return;
 
     const text = input;
     setInput('');
+
+    const thisMessageFileName = selectedFile?.name ?? null;
+
+    if (selectedFile) {
+      setIsUploading(true);
+      setUploadError(null);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const res = await fetch('/api/upload-db', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setUploadError(data.error || 'Upload failed');
+          setIsUploading(false);
+          return;
+        }
+
+        setSelectedFile(null);
+        setCurrentActiveDatabaseId(data.id);
+        setActiveDatabaseName(selectedFile.name);
+
+        await handleDatabaseChange(data.id);
+        await fetchDatabases();
+      } catch (err) {
+        console.error('Upload failed:', err);
+        setUploadError('Something went wrong uploading the file');
+        setIsUploading(false);
+        return;
+      }
+
+      setIsUploading(false);
+    }
 
     try {
       const res = await fetch('/api/messages', {
@@ -78,14 +214,19 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
     }
 
     sendMessage(
-      { text },
+      {
+        text,
+        metadata: thisMessageFileName ? { attachedFileName: thisMessageFileName } : undefined,
+      },
       {
         body: {
           reasoningLevel: currentReasoningLevel,
+          uploadedDatabaseId: currentActiveDatabaseId,
         },
       }
     );
   };
+
   const handleReasoningChange = async (value: 'low' | 'medium' | 'high') => {
     setCurrentReasoningLevel(value);
 
@@ -107,14 +248,14 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
       console.error('Failed to update reasoning level:', err);
     }
   };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() && !isBusy) {
+      if ((input.trim() || selectedFile) && !isBusy) {
         handleSubmit(e as unknown as React.FormEvent);
       }
     }
-    // Shift+Enter: do nothing, let the browser insert a newline as normal
   };
 
   const handleClearChat = async () => {
@@ -213,8 +354,48 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
 
       <footer className="border-t border-border/80 bg-card">
         <div className="mx-auto max-w-4xl px-6 py-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            
+            <DatabaseDropdown
+              databases={databases}
+              activeDatabaseId={currentActiveDatabaseId}
+              onSelect={handleDropdownSelect}
+              onDelete={handleDropdownDelete}
+              onUpload={() => {
+                document.getElementById('db-upload')?.click();
+              }}
+            />
+
+            {selectedFile && (
+              <span className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+                <Paperclip className="h-3 w-3" />
+                <span className="font-mono truncate max-w-[200px]">{selectedFile.name}</span>
+                <button
+                  type="button"
+                  onClick={handleClearFile}
+                  className="ml-1 hover:text-foreground"
+                  disabled={isUploading || isBusy}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+          </div>
+
+          {uploadError && (
+            <p className="mb-2 text-xs text-destructive">{uploadError}</p>
+          )}
+
           <form onSubmit={handleSubmit}>
             <div className="flex items-end gap-3 rounded-3xl border border-border/80 bg-card p-3 shadow-sm">
+              <input
+                type="file"
+                accept=".sqlite,.db"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="db-upload"
+                disabled={isUploading || isBusy}
+              />
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -223,6 +404,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                 disabled={isBusy}
                 className="max-h-48 min-h-[60px] flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
               />
+                            
 
               <div className="flex items-center gap-2">
                 <select
@@ -235,6 +417,7 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                   <option value="medium">Med</option>
                   <option value="high">High</option>
                 </select>
+                
 
                 <Button
                   type="button"
@@ -251,10 +434,10 @@ export default function Chat({ initialMessages, reasoningLevel }: ChatProps) {
                 <Button
                   type="submit"
                   variant="default"
-                  disabled={isBusy || !input.trim()}
+                  disabled={isBusy || (!input.trim() && !selectedFile)}
                   className="rounded-full px-6 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  {isBusy ? "..." : "Send"}
+                  {isUploading ? "Uploading..." : isBusy ? "..." : "Send"}
                 </Button>
               </div>
             </div>

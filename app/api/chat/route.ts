@@ -4,9 +4,10 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 
 import { chatModel } from '@/app/actions';
-import { SystemPrompt } from '@/app/lib/prompts/systemprompt';
+import { buildSystemPrompt} from '@/app/lib/prompts/systemprompt';
 import { executeQuery } from "../../lib/db/executeQuery";
 import { tvly } from '../../lib/tavily/tavily';
+import { supabaseAdmin } from '@/app/lib/supabase/admin';
 
 import { tool } from 'ai';
 // import { openai } from '@ai-sdk/openai';
@@ -24,17 +25,18 @@ export const presentAnalysis = tool({
       keyInsights: z.array(z.object({
         label: z.string(),
         body: z.string(),
-      })).min(1).max(3), // was 5 — smaller cap, less delta volume
+      })).min(1).max(3),
       anomalies: z.array(z.object({
         label: z.string(),
         body: z.string(),
         severity: z.enum(['low', 'medium', 'high']).optional(),
-      })).max(2).optional(), // add a cap here too
-      recommendations: z.array(z.string()).max(3).optional(), // was 4
-      followUpQuestions: z.array(z.string()).min(2).max(3).optional(), // was 4
+      })).max(2).optional(),
+      recommendations: z.array(z.string()).max(3).optional(),
+      followUpQuestions: z.array(z.string()).min(2).max(3).optional(),
     }),
   execute: async (input) => input,
 });
+
 export const renderDcaCalculator = tool({
   description:
     'Render an interactive financial calculator widget when the user would benefit from ' +
@@ -121,7 +123,6 @@ export const renderChart = tool({
   }),
   execute: async (input) => {
     try {
-      // basic sanity check before handing off to frontend
       if (!input.data?.length) {
         return { error: 'No data available to chart.' };
       }
@@ -131,6 +132,7 @@ export const renderChart = tool({
     }
   },
 });
+
 export const queryDatabase = tool({
   description: 'Execute a read-only PostgreSQL query against the hedge fund database and return the results',
   inputSchema: z.object({
@@ -174,15 +176,42 @@ export async function POST(request: Request) {
   const {
     messages,
     reasoningLevel,
+    uploadedDatabaseId,
   }: {
     messages: UIMessage[];
     reasoningLevel: 'low' | 'medium' | 'high';
+    uploadedDatabaseId: string | null;
   } = await request.json();
+
+  let activeStoragePath: string | null = null;
+  let uploadedDatabase: {
+    fileName: string;
+    schema: unknown;
+  } | null = null;
+
+  if (uploadedDatabaseId) {
+    const { data: dbRecord, error } = await supabaseAdmin
+      .from('uploaded_databases')
+      .select('file_name, storage_path, schema_json')
+      .eq('id', uploadedDatabaseId)
+      .eq('user_id', session.userId) // enforce ownership at the app level
+      .single();
+
+    if (error || !dbRecord) {
+      console.error('❌ Could not load uploaded database:', error);
+    } else {
+      activeStoragePath = dbRecord.storage_path;
+      uploadedDatabase = {
+        fileName: dbRecord.file_name,
+        schema: dbRecord.schema_json,
+      };
+    }
+  }
 
   const result = streamText({
     model: chatModel,
     messages: await convertToModelMessages(messages),
-    system: SystemPrompt,
+    system: buildSystemPrompt(uploadedDatabase),
     tools: {
       queryDatabase,
       renderChart,
@@ -190,6 +219,7 @@ export async function POST(request: Request) {
       webSearch,
       renderDcaCalculator,
       renderCompoundInterestCalculator,
+      // queryUploadedDatabase — added in Step 6
       // web_search: openai.tools.webSearch({}),
     },
     stopWhen: stepCountIs(50),

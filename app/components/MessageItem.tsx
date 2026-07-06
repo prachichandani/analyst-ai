@@ -3,18 +3,16 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Paperclip } from 'lucide-react';
 import { ThoughtBlock, getThoughtParts } from './ThoughtBlock';
 import { ChartRenderer } from './ChartRenderer';
 import { AnalysisCard } from './AnalysisCard';
 import { DCACalculator } from './DSACalculator';
 import { CompoundInterestCalculator } from './CompoundInterestCalculator';
 
-
-
-const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
+const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
   message: any; isLast: boolean; isBusy: boolean; onFollowUp: (q: string) => void;
 }) => {
-// const MessageItem = memo(({ message, isLast, isBusy }: { message: any; isLast: boolean; isBusy: boolean }) => {
   const isLive = isLast && message.role === 'assistant' && isBusy;
   const { reasoning, tools } = getThoughtParts(message);
   const textPart = message.parts?.find((p: any) => p.type === 'text');
@@ -26,8 +24,6 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
     (p: any) => p.type === 'tool-renderCompoundInterestCalculator' && p.output
   ) ?? [];
 
-  // Ensure the "presentAnalysis" block doesn't visually stick to the previous assistant content.
-  // (We base this on reasoning/tools/markdown text; chart spacing is handled separately by the layout.)
   const hasPriorAssistantContent =
     Boolean(reasoning && reasoning.trim()) ||
     (tools?.length ?? 0) > 0 ||
@@ -84,24 +80,24 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
           chartParts.map((p: any, i: number) => (
             <ChartRenderer key={`${message.id}-chart-${i}`} spec={p.output} />
           ))}
-          {message.role === 'assistant' &&
-            calculatorParts.map((p: any, i: number) => (
-              <DCACalculator
-                key={`${message.id}-calc-${i}`}
-                title={p.output.title}
-                keyInsight={p.output.keyInsight}
-                defaults={p.output.defaults}
-              />
-            ))}
-          {message.role === 'assistant' &&
-            compoundInterestParts.map((p: any, i: number) => (
-              <CompoundInterestCalculator
-                key={`${message.id}-ci-${i}`}
-                title={p.output.title}
-                keyInsight={p.output.keyInsight}
-                defaults={p.output.defaults}
-              />
-            ))}
+        {message.role === 'assistant' &&
+          calculatorParts.map((p: any, i: number) => (
+            <DCACalculator
+              key={`${message.id}-calc-${i}`}
+              title={p.output.title}
+              keyInsight={p.output.keyInsight}
+              defaults={p.output.defaults}
+            />
+          ))}
+        {message.role === 'assistant' &&
+          compoundInterestParts.map((p: any, i: number) => (
+            <CompoundInterestCalculator
+              key={`${message.id}-ci-${i}`}
+              title={p.output.title}
+              keyInsight={p.output.keyInsight}
+              defaults={p.output.defaults}
+            />
+          ))}
 
         {message.role === 'assistant' &&
           validAnalysisParts.map((p: any, i: number) => (
@@ -112,7 +108,7 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
               <AnalysisCard data={p.input} onFollowUp={onFollowUp} />
             </div>
           ))}
-        {message.role === 'assistant' && hasText &&  (
+        {message.role === 'assistant' && hasText && (
           <div className="rounded-3xl border border-border/60 bg-transparent px-5 py-4">
             <div className="prose max-w-none font-sans dark:prose-invert prose-p:leading-relaxed prose-p:mt-3 prose-p:mb-0 prose-ul:mt-3 prose-ul:mb-0 prose-ol:mt-3 prose-ol:mb-0 prose-a:font-medium">
               <ReactMarkdown
@@ -170,6 +166,13 @@ const MessageItem = memo(({ message, isLast, isBusy,onFollowUp }: {
                 {textPart.text}
               </ReactMarkdown>
             </div>
+          </div>
+        )}
+
+        {message.role === 'user' && message.metadata?.attachedFileName && (
+          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Paperclip className="h-3 w-3" />
+            <span className="font-mono">{message.metadata.attachedFileName}</span>
           </div>
         )}
 
