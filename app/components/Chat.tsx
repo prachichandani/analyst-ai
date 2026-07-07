@@ -160,35 +160,65 @@ export default function Chat({
     const text = input;
     setInput('');
 
-    const thisMessageFileName = selectedFile?.name ?? null;
+    const thisMessageFileName = selectedFile?.name ?? null; // only set if uploading right now
 
     if (selectedFile) {
       setIsUploading(true);
       setUploadError(null);
 
       try {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
-        const res = await fetch('/api/upload-db', {
+        // Step A: ask our server for a signed upload URL — tiny request, no file yet
+        const signRes = await fetch('/api/upload-db/sign', {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: selectedFile.name }),
         });
 
-        const data = await res.json();
+        const signData = await signRes.json();
 
-        if (!res.ok) {
-          setUploadError(data.error || 'Upload failed');
+        if (!signRes.ok) {
+          setUploadError(signData.error || 'Could not prepare upload');
           setIsUploading(false);
           return;
         }
 
-        setSelectedFile(null);
-        setCurrentActiveDatabaseId(data.id);
-        setActiveDatabaseName(selectedFile.name);
+        // Step B: upload the actual file directly to Supabase Storage,
+        // bypassing our own server entirely — no Vercel payload size limit here
+        const uploadRes = await fetch(signData.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/x-sqlite3' },
+          body: selectedFile,
+        });
 
-        await handleDatabaseChange(data.id);
-        await fetchDatabases();
+        if (!uploadRes.ok) {
+          setUploadError('File upload failed');
+          setIsUploading(false);
+          return;
+        }
+
+        // Step C: tell our server the file is uploaded, so it can extract
+        // the schema and save the tracking row
+        const processRes = await fetch('/api/upload-db/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            storagePath: signData.storagePath,
+            fileName: selectedFile.name,
+          }),
+        });
+
+        const processData = await processRes.json();
+
+        if (!processRes.ok) {
+          setUploadError(processData.error || 'Failed to process file');
+          setIsUploading(false);
+          return;
+        }
+
+        setActiveDatabaseName(selectedFile.name);
+        setSelectedFile(null);
+        await handleDatabaseChange(processData.id);
+        await fetchDatabases(); // refresh dropdown list to include the new upload
       } catch (err) {
         console.error('Upload failed:', err);
         setUploadError('Something went wrong uploading the file');
