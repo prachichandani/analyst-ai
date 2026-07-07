@@ -18,22 +18,39 @@ const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
   const { reasoning, tools } = getThoughtParts(message);
   const textPart = message.parts?.find((p: any) => p.type === 'text');
   const hasText = textPart && 'text' in textPart && textPart.text.trim();
-  const calculatorParts = message.parts?.filter(
+  const toolData = message.metadata?.toolData as any[] | undefined;
+
+  const calculatorPartsFromMetadata = toolData?.filter(
+    (t: any) => t.toolName === 'renderDcaCalculator' && t.result
+  ).map((t: any) => ({ type: 'tool-renderDcaCalculator', output: t.result })) ?? [];
+  const calculatorPartsFromParts = message.parts?.filter(
     (p: any) => p.type === 'tool-renderDcaCalculator' && p.output
   ) ?? [];
-  const compoundInterestParts = message.parts?.filter(
+  const calculatorParts = calculatorPartsFromParts.length > 0 ? calculatorPartsFromParts :
+                         calculatorPartsFromMetadata;
+
+  const compoundInterestPartsFromMetadata = toolData?.filter(
+    (t: any) => t.toolName === 'renderCompoundInterestCalculator' && t.result
+  ).map((t: any) => ({ type: 'tool-renderCompoundInterestCalculator', output: t.result })) ?? [];
+  const compoundInterestPartsFromParts = message.parts?.filter(
     (p: any) => p.type === 'tool-renderCompoundInterestCalculator' && p.output
   ) ?? [];
-  const artifactParts = message.parts?.filter(
+  const compoundInterestParts = compoundInterestPartsFromParts.length > 0 ? compoundInterestPartsFromParts :
+                                compoundInterestPartsFromMetadata;
+
+  const artifactPartsFromMetadata = toolData?.filter(
+    (t: any) => t.toolName === 'renderArtifact' && t.result
+  ).map((t: any) => ({ type: 'tool-renderArtifact', output: t.result })) ?? [];
+  const artifactPartsFromParts = message.parts?.filter(
     (p: any) => p.type === 'tool-renderArtifact' && p.output
   ) ?? [];
+  const artifactParts = artifactPartsFromParts.length > 0 ? artifactPartsFromParts :
+                        artifactPartsFromMetadata;
 
   const hasPriorAssistantContent =
     Boolean(reasoning && reasoning.trim()) ||
     (tools?.length ?? 0) > 0 ||
     Boolean(hasText);
-
-  const toolData = message.metadata?.toolData as any[] | undefined;
 
   const chartPartsFromMetadata = toolData?.filter(
     (t: any) => t.toolName === 'renderChart' && t.result
