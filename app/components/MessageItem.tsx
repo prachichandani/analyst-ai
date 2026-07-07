@@ -110,7 +110,7 @@ const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
           ))}
         {message.role === 'assistant' && hasText && (
           <div className="rounded-3xl border border-border/60 bg-transparent px-5 py-4">
-            <div className="prose max-w-none font-sans dark:prose-invert prose-p:leading-relaxed prose-p:mt-3 prose-p:mb-0 prose-ul:mt-3 prose-ul:mb-0 prose-ol:mt-3 prose-ol:mb-0 prose-a:font-medium">
+            <div className="prose max-w-none font-sans dark:prose-invert prose-p:leading-relaxed prose-p:mt-3 prose-p:mb-0 prose-ul:mt-3 prose-ul:mb-0 prose-ol:mt-3 prose-ol:mb-0 prose-a:font-medium prose-strong:text-foreground prose-strong:font-semibold">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{

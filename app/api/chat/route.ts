@@ -8,6 +8,8 @@ import { buildSystemPrompt} from '@/app/lib/prompts/systemprompt';
 import { executeQuery } from "../../lib/db/executeQuery";
 import { tvly } from '../../lib/tavily/tavily';
 import { supabaseAdmin } from '@/app/lib/supabase/admin';
+import initSqlJs from 'sql.js';
+import path from 'path';
 
 import { tool } from 'ai';
 // import { openai } from '@ai-sdk/openai';
@@ -78,10 +80,7 @@ export const renderCompoundInterestCalculator = tool({
 
 export const webSearch = tool({
   description:
-    'Search the web for current, real-world information — e.g. recent news about a fund/company, ' +
-    'market events, regulatory filings, recent performance commentary, or anything not present in the ' +
-    'internal database. Use this to supplement, not replace, queryDatabase — database numbers are ground truth, ' +
-    'web search is for context, recency, and qualitative info.',
+    'Search the web for current, real-world information . use this to get extra information about the database if you find missing data or need more context for both uploaded database and the data we have in our system',
   inputSchema: z.object({
     query: z.string().describe('The search query'),
     searchDepth: z.enum(['basic', 'advanced']).optional().describe(
@@ -112,7 +111,7 @@ export const webSearch = tool({
 
 export const renderChart = tool({
   description:
-    "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape.When naming fields in chart data, use clear suffixes so values render correctly: dollar amounts should include 'usd', 'aum', or 'value' in the key name (e.g. aum_usd, value_usd); percentages should include 'pct', 'return', 'alpha', or 'rate' (e.g. estimated_return_pct); dates should stay in ISO format (YYYY-MM-DD); quarters should stay in 'YYYYQ#' format (e.g. 2021Q3).",
+    "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape. Use this also for the uploaded database file. Always render a chart if the data can be visualized.",
   inputSchema: z.object({
     chartType: z.enum(['bar', 'line', 'pie', 'area', 'scatter', 'table']),
     title: z.string(),
@@ -207,6 +206,70 @@ export async function POST(request: Request) {
       };
     }
   }
+  let openUploadedDb: any = null;
+
+  const queryUploadedDatabase = tool({
+    description:
+      'Execute a read-only SQL query against the SQLite database the user has uploaded. ' +
+      'Use this only for questions about the uploaded file — not the internal hedge fund database.',
+    inputSchema: z.object({
+      sql: z.string().describe('The SELECT query to run'),
+      purpose: z.string().describe(
+        'A short, plain-English description of what this query is fetching, ' +
+        'shown to the user in the UI.'
+      ),
+    }),
+    execute: async ({ sql, purpose }) => {
+      console.log('🔧 [queryUploadedDatabase] purpose:', purpose, '| sql:', sql);
+
+      // Only allow SELECT — same read-only principle as queryDatabase
+      if (!/^\s*SELECT/i.test(sql)) {
+        return { error: 'Only SELECT queries are allowed on the uploaded database.' };
+      }
+
+      try {
+        // Download + open only if we haven't already done so in this request
+        if (!openUploadedDb) {
+          if (!activeStoragePath) {
+            return { error: 'No uploaded database is currently active.' };
+          }
+
+          const { data: fileBlob, error: downloadError } = await supabaseAdmin.storage
+            .from('sqlite-uploads')
+            .download(activeStoragePath);
+
+          if (downloadError || !fileBlob) {
+            console.error('❌ Failed to download uploaded database:', downloadError);
+            return { error: 'Could not access the uploaded database.' };
+          }
+
+          const buffer = Buffer.from(await fileBlob.arrayBuffer());
+          const SQL = await initSqlJs({
+            locateFile: (file) => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', file),
+          });
+          openUploadedDb = new SQL.Database(buffer);
+        }
+
+        const result = openUploadedDb.exec(sql);
+        console.log(result);
+
+        if (!result.length) {
+          return { columns: [], rows: [] };
+        }
+
+        const { columns, values } = result[0];
+        const rows = values.map((row: any[]) =>
+          Object.fromEntries(row.map((v, i) => [columns[i], v]))
+        );
+
+        console.log('✅ [queryUploadedDatabase] returned', rows.length, 'rows');
+        return { columns, rows };
+      } catch (err) {
+        console.error('❌ [queryUploadedDatabase] failed:', err);
+        return { error: 'Could not run this query on the uploaded database.' };
+      }
+    },
+  });
 
   const result = streamText({
     model: chatModel,
@@ -219,6 +282,7 @@ export async function POST(request: Request) {
       webSearch,
       renderDcaCalculator,
       renderCompoundInterestCalculator,
+      ...(activeStoragePath ? { queryUploadedDatabase } : {}),
       // queryUploadedDatabase — added in Step 6
       // web_search: openai.tools.webSearch({}),
     },
