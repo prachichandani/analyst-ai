@@ -155,6 +155,37 @@ export const queryDatabase = tool({
   },
 });
 
+
+export const renderArtifact = tool({
+  description:
+    'Render a custom, self-contained interactive artifact (dashboard, comparison view, ' +
+    'custom chart/table, mini calculator/tool, etc.) as a complete HTML document. Use this ' +
+    'for anything beyond a single structured chart (use renderChart for a simple single chart). ' +
+    'Use this whenever an interactive or composed visual would help the analysis — e.g. ' +
+    'comparing multiple funds side by side, a sortable/filterable table, a what-if tool with ' +
+    'sliders, or a small dashboard combining a chart and key numbers. ' +
+    'If you already fetched data via queryDatabase, queryUploadedDatabase, or webSearch that ' +
+    'the artifact should display, pass it in the `data` field — do NOT hardcode fetched values ' +
+    'into the HTML string. Your script can read it from window.__ARTIFACT_DATA__ at runtime. ' +
+    'The HTML must be fully self-contained: inline <style> and <script> only, vanilla JS ' +
+    '(no build step, no imports). Chart.js is available via a global `Chart` — use it for any ' +
+    'charts inside the artifact rather than hand-rolling canvas/SVG drawing.',
+  inputSchema: z.object({
+    title: z.string().describe('Short title shown in the artifact header, e.g. "Fund Comparison: BAM vs RenTech"'),
+    html: z.string().describe(
+      'A complete, self-contained HTML fragment: markup + a single inline <style> block + a ' +
+      'single inline <script> block. No <html>/<head>/<body> tags needed — just the content. ' +
+      'Read data via window.__ARTIFACT_DATA__ if `data` was provided. Do not use localStorage, ' +
+      'sessionStorage, or any external fetch/import.'
+    ),
+    data: z
+      .union([z.array(z.record(z.string(), z.any())), z.record(z.string(), z.any())])
+      .optional()
+      .describe('Structured data the artifact should render, already fetched in this turn.'),
+  }),
+  execute: async (input) => input,
+});
+
 export async function POST(request: Request) {
   // Check authentication
   const session = await getIronSession<{ userId: string; email: string }>(
@@ -280,6 +311,7 @@ export async function POST(request: Request) {
         ? { queryUploadedDatabase }
         : { queryDatabase }),
       renderChart,
+      renderArtifact,
       presentAnalysis,
       webSearch,
       renderDcaCalculator,

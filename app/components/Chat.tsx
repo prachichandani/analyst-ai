@@ -65,19 +65,59 @@ export default function Chat({
   };
 
   const [chatMessages] = useState(() =>
-    initialMessages.map((msg) => ({
-      id: msg.id,
-      role: msg.role,
-      parts: [{ type: 'text' as const, text: msg.content }],
-      metadata: {
-        ...msg.metadata,
-        toolData: msg.tool_data,
-      },
-    }))
+    initialMessages.map((msg) => {
+      const parts: any[] = [{ type: 'text' as const, text: msg.content }];
+
+      // Convert tool_data back to parts for rendering
+      if (msg.tool_data && Array.isArray(msg.tool_data)) {
+        msg.tool_data.forEach((tool: any) => {
+          if (tool.toolName === 'renderArtifact' && tool.result) {
+            parts.push({
+              type: 'tool-renderArtifact',
+              output: tool.result,
+            });
+          }
+          if (tool.toolName === 'renderChart' && tool.result) {
+            parts.push({
+              type: 'tool-renderChart',
+              output: tool.result,
+            });
+          }
+          if (tool.toolName === 'renderDcaCalculator' && tool.result) {
+            parts.push({
+              type: 'tool-renderDcaCalculator',
+              output: tool.result,
+            });
+          }
+          if (tool.toolName === 'renderCompoundInterestCalculator' && tool.result) {
+            parts.push({
+              type: 'tool-renderCompoundInterestCalculator',
+              output: tool.result,
+            });
+          }
+          if (tool.toolName === 'presentAnalysis' && tool.args) {
+            parts.push({
+              type: 'tool-presentAnalysis',
+              input: tool.args,
+            });
+          }
+        });
+      }
+
+      return {
+        id: msg.id,
+        role: msg.role,
+        parts,
+        metadata: {
+          ...msg.metadata,
+          toolData: msg.tool_data,
+        },
+      };
+    })
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({
-    experimental_throttle: 150,
+    experimental_throttle: 180,
     onFinish: async (response) => {
       await handleChatFinish(response, currentReasoningLevel);
     },

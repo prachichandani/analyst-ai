@@ -9,6 +9,7 @@ import { ChartRenderer } from './ChartRenderer';
 import { AnalysisCard } from './AnalysisCard';
 import { DCACalculator } from './DSACalculator';
 import { CompoundInterestCalculator } from './CompoundInterestCalculator';
+import { ArtifactRenderer } from './ArtifactRenderer';
 
 const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
   message: any; isLast: boolean; isBusy: boolean; onFollowUp: (q: string) => void;
@@ -22,6 +23,9 @@ const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
   ) ?? [];
   const compoundInterestParts = message.parts?.filter(
     (p: any) => p.type === 'tool-renderCompoundInterestCalculator' && p.output
+  ) ?? [];
+  const artifactParts = message.parts?.filter(
+    (p: any) => p.type === 'tool-renderArtifact' && p.output
   ) ?? [];
 
   const hasPriorAssistantContent =
@@ -96,6 +100,15 @@ const MessageItem = memo(({ message, isLast, isBusy, onFollowUp }: {
               title={p.output.title}
               keyInsight={p.output.keyInsight}
               defaults={p.output.defaults}
+            />
+          ))}
+        {message.role === 'assistant' &&
+          artifactParts.map((p: any, i: number) => (
+            <ArtifactRenderer
+              key={`${message.id}-artifact-${i}`}
+              title={p.output.title}
+              html={p.output.html}
+              data={p.output.data}
             />
           ))}
 

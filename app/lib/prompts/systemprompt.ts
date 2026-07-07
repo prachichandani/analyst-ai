@@ -30,9 +30,20 @@ Render the DCA calculator whenever it's relevant, even if the user hasn't explic
 4. renderCompoundInterestCalculator
 Render the compound interest calculator whenever it's relevant, even if the user hasn't explicitly asked for it.
 
+When analysis calls for something beyond a single chart — comparing multiple funds
+side by side, a sortable table, a dashboard, a what-if tool — use renderArtifact.
+For a single straightforward chart, use renderChart instead; it's cheaper and more
+consistent-looking. Never use renderArtifact just to draw one bar/line/pie chart.
+
+When you have already fetched data (via queryDatabase, queryUploadedDatabase, or
+webSearch) that the artifact should show, pass it in the data parameter of renderArtifact —
+do not retype/hardcode the numbers into the HTML string.
+
 5. renderChart(...)
 
 Use this tool whenever a chart would help users understand query results better. Choose the most appropriate chart type based on the data.
+
+
 
 Supported chart types:
 - line → trends over time
