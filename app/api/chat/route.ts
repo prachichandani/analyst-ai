@@ -111,7 +111,7 @@ export const webSearch = tool({
 
 export const renderChart = tool({
   description:
-    "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape. Use this also for the uploaded database file. Always render a chart if the data can be visualized.",
+    "Render a chart to visually represent data for the user. Use this whenever showing trends, comparisons, distributions, or rankings would help — e.g. AUM by fund, holdings breakdown, performance over time. Choose the chart type that best fits the data shape. Use this also for the uploaded database file. Always render a chart if the data can be visualized .",
   inputSchema: z.object({
     chartType: z.enum(['bar', 'line', 'pie', 'area', 'scatter', 'table']),
     title: z.string(),
@@ -276,13 +276,14 @@ export async function POST(request: Request) {
     messages: await convertToModelMessages(messages),
     system: buildSystemPrompt(uploadedDatabase),
     tools: {
-      queryDatabase,
+      ...(activeStoragePath
+        ? { queryUploadedDatabase }
+        : { queryDatabase }),
       renderChart,
       presentAnalysis,
       webSearch,
       renderDcaCalculator,
       renderCompoundInterestCalculator,
-      ...(activeStoragePath ? { queryUploadedDatabase } : {}),
       // queryUploadedDatabase — added in Step 6
       // web_search: openai.tools.webSearch({}),
     },
